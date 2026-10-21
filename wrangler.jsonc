@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "credit-card-rewards",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "b57383f5-81bd-4cc3-a52b-d7266edb246d",
       "migrations_dir": "migrations"
     }
   ]
