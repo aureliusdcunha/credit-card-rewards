@@ -24,7 +24,7 @@ AI extraction creates a `needs_review` draft. It never publishes rules on its ow
 
 ## AI provider setup
 
-To use the Google Gemini free tier for source extraction, store GEMINI_API_KEY as a Cloudflare Worker secret. See [AI-PROVIDER-SETUP.md](./docs/AI-PROVIDER-SETUP.md) for setup, data-handling caveats, quota errors, and the production D1 migration check.
+To use the Google Gemini free tier for source extraction, store GEMINI_API_KEY as a Cloudflare Worker secret. The Worker retries transient overloads and falls back across configurable Gemini models. See [AI-PROVIDER-SETUP.md](./docs/AI-PROVIDER-SETUP.md) for setup, data-handling caveats, quota errors, and the production D1 migration check.
 
 ## Deploy to Cloudflare
 
