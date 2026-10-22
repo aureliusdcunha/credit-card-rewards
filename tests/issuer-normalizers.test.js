@@ -304,3 +304,85 @@ test("does not mistake a fee-waiver spend threshold for the actual annual fee", 
   assert.equal(draft.annualFee, undefined);
   assert.match(draft.annualFeeWaiver, /₹4,00,000/);
 });
+
+
+test("extracts an explicitly stated single card network from official source text", () => {
+  const sourceUrl = "https://issuer.bank.in/cards/sample";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Sample Visa Card",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Payment network: Visa.",
+    "The card earns 4 reward points per ₹100 spent.",
+    "SOURCE TEXT END"
+  ].join("\\n");
+  const draft = {
+    issuer: "Sample Bank",
+    cardName: "Sample Credit Card",
+    network: "Not specified",
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, {
+    issuer: draft.issuer,
+    cardName: draft.cardName,
+    sourceText,
+    sourceUrl
+  });
+
+  assert.equal(draft.network, "Visa");
+  assert.equal(draft.missingItems.some(item => /payment network/i.test(item)), false);
+});
+
+test("marks multiple explicit card-network variants as variant-dependent", () => {
+  const sourceUrl = "https://issuer.bank.in/cards/sample";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Sample Credit Card",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "The card is available on Visa or Mastercard depending on the selected card variant.",
+    "SOURCE TEXT END"
+  ].join("\\n");
+  const draft = {
+    issuer: "Sample Bank",
+    cardName: "Sample Credit Card",
+    network: null,
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, { sourceText, sourceUrl });
+  assert.equal(draft.network, "Visa / Mastercard (variant-dependent)");
+});
+
+test("does not infer a card network from unrelated references to network brands", () => {
+  const sourceUrl = "https://issuer.bank.in/cards/sample";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Sample Credit Card Terms",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Use your card at any outlet that accepts Visa, Mastercard or RuPay.",
+    "SOURCE TEXT END"
+  ].join("\\n");
+  const draft = {
+    issuer: "Sample Bank",
+    cardName: "Sample Credit Card",
+    network: "Not specified",
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, { sourceText, sourceUrl });
+  assert.equal(draft.network, null);
+  assert.match(draft.missingItems.join(" "), /Could not verify the payment network/i);
+});
