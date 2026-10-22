@@ -77,14 +77,17 @@
     const exclusions = Array.isArray(card.exclusions) ? card.exclusions : [];
     const rules = Array.isArray(card.rules) ? card.rules : [];
     const benefits = Array.isArray(card.benefits) ? card.benefits : [];
-    const eligibilityBenefits = benefits.filter(benefit =>
-      /\b(?:lounge|spend threshold|preceding calendar quarter|minimum spend|minimum .*transaction|eligibility|eligible spends?|priority pass|milestone spend)\b/i
-        .test([benefit.name, benefit.description, benefit.conditions, benefit.sourceQuote].filter(Boolean).join(" "))
-    );
+    const eligibilityBenefits = benefits.filter(benefit => {
+      const detail = [benefit.name, benefit.description, benefit.conditions, benefit.sourceQuote].filter(Boolean).join(" ");
+      const feeRelated = /\b(?:joining fee|annual fee|renewal fee|fee waiver|finance charge|late payment fee|foreign currency markup|forex markup)\b/i.test(detail);
+      const hasCondition = Boolean(String(benefit.conditions || "").trim()) ||
+        /\b(?:lounge|spend threshold|preceding calendar quarter|minimum spend|minimum .*transaction|eligibility|eligible spends?|priority pass|milestone spend|spend of|spends of|within the first \d+ days|upon spending)\b/i.test(detail);
+      return !feeRelated && hasCondition;
+    });
     const conditionalRules = rules.filter(rule =>
       rule.notes || rule.minTransaction != null || rule.cap || rule.validFrom || rule.validTo
     );
-    let html = sectionIntro("Excluded spend types and conditions that can affect eligibility.", exclusions.length + " exclusion(s)");
+    let html = sectionIntro("Exclusions and benefit eligibility conditions that affect access or earning.", exclusions.length + " exclusion(s)");
     if (!exclusions.length) {
       html += emptyState("No exclusions recorded", "This does not mean the issuer has no exclusions. Confirm excluded merchant categories, MCCs, transaction types and other limitations in the current terms.");
     } else {
@@ -164,7 +167,7 @@
     const annualFeeLabel = card.annualFee == null
       ? "Not specified"
       : C.formatINR(card.annualFee) + (hasTaxNote ? " + applicable taxes" : "");
-    let html = sectionIntro("Fees and waiver terms recorded for this card.", "Fee summary");
+    let html = sectionIntro("Joining fee, annual fee and waiver conditions recorded for this card.", "Fee summary");
     html += '<div class="modal-fee-grid">' +
       '<article class="modal-fee-card"><span>Annual fee</span><strong>' + escape(annualFeeLabel) + '</strong></article>' +
       '<article class="modal-fee-card"><span>Joining fee</span><strong>' + escape(joiningFeeLabel) + '</strong></article>' +
