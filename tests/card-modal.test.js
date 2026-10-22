@@ -123,7 +123,7 @@ test("Fees tab distinguishes unknown fees from zero fees and includes fee-waiver
   assert.match(html, /Annual fee/);
   assert.match(html, /₹2,500/);
   assert.match(html, /Joining fee/);
-  assert.match(html, /₹2,500 \\+ applicable taxes/);
+  assert.match(html, /₹2,500 \+ applicable taxes/);
   assert.match(html, /Waived when annual spend reaches ₹4 lakh/);
   assert.match(html, /Joining and renewal fee/);
   assert.match(html, /Missing fee value means it has not been recorded/i);
