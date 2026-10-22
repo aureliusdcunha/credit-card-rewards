@@ -243,7 +243,9 @@ function combinedJoiningRenewalFeeFact(clauses) {
     if (!match) continue;
     const amount = Number(match[1].replace(/,/g, ""));
     if (!Number.isFinite(amount) || amount < 0) continue;
-    return { ...clause, amount, explicitZero: amount === 0, combinedJoiningRenewal: true };
+    const taxEvidence = /(?:joining\\s*\\/\\s*(?:renewal\\s+)?(?:annual\\s+)?(?:membership\\s+)?fee)[\\s\\S]{0,100}(?:₹\\s*|Rs\\.?\\s*|INR\\s*)[\\d,]+(?:\\.\\d+)?[\\s\\S]{0,50}(?:\\+\\s*(?:applicable\\s*)?tax(?:es)?|plus\\s+applicable\\s+tax(?:es)?)/i.test(String(clause.text || ""));
+    const taxesApplicable = /(?:plus|\\+)\\s*(?:applicable\\s*)?tax(?:es)?\\b/i.test(String(clause.quote || "")) || taxEvidence;
+    return { ...clause, amount, explicitZero: amount === 0, combinedJoiningRenewal: true, taxesApplicable };
   }
   return null;
 }
@@ -378,6 +380,10 @@ export function normalizeCommonCardFacts(data, context = {}) {
   const combinedFeeFact = combinedJoiningRenewalFeeFact(clauses);
   const joiningFact = explicitFeeFact(clauses, "joining") || combinedFeeFact;
   const annualFact = explicitFeeFact(clauses, "annual") || combinedFeeFact;
+  if (combinedFeeFact && annualFact && annualFact.quote === combinedFeeFact.quote) {
+    annualFact.combinedJoiningRenewal = true;
+    annualFact.taxesApplicable = combinedFeeFact.taxesApplicable;
+  }
   const waiverFact = findWaiverFact(clauses);
 
   if (joiningFact) data.joiningFee = joiningFact.amount;
@@ -391,7 +397,7 @@ export function normalizeCommonCardFacts(data, context = {}) {
     ].filter(Boolean);
     const description = facts.map(({ label, fact }) =>
       label + ": " + (fact.amount === 0 ? "₹0" : "₹" + fact.amount.toLocaleString("en-IN")) +
-      (/\b(?:plus|\+)\s*(?:applicable\s*)?tax(?:es)?\b/i.test(fact.quote) ? " plus applicable taxes" : "")
+      (/\b(?:plus|\+)\s*(?:applicable\s*)?tax(?:es)?\b/i.(test(fact.quote) || fact.taxesApplicable === true) ? " plus applicable taxes" : "")
     ).join(". ") + ".";
     const quote = facts.map(item => item.fact.quote).join(" ");
     genericUpsertBenefit(data, {
