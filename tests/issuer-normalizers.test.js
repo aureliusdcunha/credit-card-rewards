@@ -407,7 +407,7 @@ test("extracts source-backed SimplySAVE base and accelerated reward rules plus t
     "Terms & Conditions - Reward Points. Earn 10 Reward Points for every Rs.150 spent on Dining, Movies, Groceries & Departmental stores and 1 Reward Point for every Rs. 150 spent on all other categories.",
     "Maximum Cap of 5,000 Reward Point/Month - Cumulative 10X Reward Points accrued on Dining, Movies, Departmental Store & Grocery spends for your SimplySAVE SBI Card will have a maximum cap of 5,000 Reward Points per month. After the maximum cap of 5,000 reward points is achieved, 1 Reward Point for every Rs.150 spent, as per the card policy, will continue to accrue.",
     "SOURCE TEXT END"
-  ].join("\\n");
+  ].join("\n");
   const draft = {
     issuer: "SBI",
     cardName: "simplysave",
@@ -470,7 +470,7 @@ test("does not create accelerated SimplySAVE rules if the monthly cap cannot be 
     "Earn 10X Reward Points per Rs. 150 spent on dining, movies, departmental stores and grocery.",
     "On all other spends, earn 1 Reward Point per Rs. 150 spent.",
     "SOURCE TEXT END"
-  ].join("\\n");
+  ].join("\n");
   const draft = { issuer: "SBI", cardName: "SimplySAVE", rules: [], benefits: [], missingItems: [], exclusions: [] };
   normalizeSbiSimplySaveExtraction(draft, { issuer: draft.issuer, cardName: draft.cardName, sourceText, sourceUrl: productUrl });
   assert.equal(draft.rules.length, 1);
