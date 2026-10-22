@@ -2,6 +2,14 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.3 — 23 October 2026
+
+- Improves server-side issuer HTML extraction by prioritizing page content, removing scripts/styles/navigation, decoding HTML entities and reading supported structured metadata.
+- When a card page is a JavaScript-rendered shell, the importer checks relevant same-issuer terms links and PDFs before failing.
+- Automatic discovery also searches selected original official issuer domains for useful legacy card pages and documents after domain migrations.
+- Keeps source fetching restricted to validated HTTPS URLs on the configured official issuer allow-list. AI output remains a review-only draft; no rules are published automatically.
+- Updates the package version, backend metadata, navigation version pill, page footers and all page asset cache-busters to **0.6.3 / build 20261023.01**.
+
 ## What's included
 
 - `src/index.js` — one Worker entry point: catalogue API, deterministic calculator API, guarded AI extraction, draft review and rule publishing.
@@ -70,12 +78,12 @@ This local config still binds Workers AI to your Cloudflare account. AI calls us
 
 1. Open **Source Review** and enter the `ADMIN_TOKEN` secret.
 2. Provide an official issuer URL. The Worker only auto-fetches HTTPS pages on its configured official-bank-domain allow-list.
-3. For a PDF URL, the Worker uses `env.AI.toMarkdown()` to extract the document text when supported (8 MB maximum in this starter). If conversion fails or the source is scanned/unreadable, paste the relevant text from the PDF and keep the official PDF URL as the source URL.
-4. Run extraction. Workers AI returns JSON with rules, exclusions, source quotes, dates, benefits and missing-information notes.
+3. For a PDF URL, the Worker uses the configured Gemini PDF transcription path or `env.AI.toMarkdown()` when supported (8 MB maximum). For a JavaScript-heavy card page, automatic discovery follows relevant same-issuer official terms links and attempts readable linked documents. If the page is blocked, the PDF is scanned/unreadable, or none of its linked sources can be read, paste the relevant terms text and keep the official URL as the source URL.
+4. Run extraction. The app searches the current issuer domain and selected original official domains, reads available HTML/PDF sources, then asks the configured AI provider for rules, exclusions, source quotes, dates, benefits and missing-information notes. No rule is published automatically.
 5. Review/edit the JSON. The publishing validator checks fields and requires a source quote for every published earn rule and exclusion.
 6. Publish to replace the current active/demo rules for the selected card. Old rules are marked `retired` rather than deleted. Alternatively reject the draft.
 
-The first version reads a public official HTML page or PDF, or text supplied by the administrator. **It does not run a general-purpose web search or autonomously discover every bank page.** That should be added as a separately rate-limited source-discovery step, with the discovered URL and source date verified before extraction.
+Automatic discovery uses search providers and issuer-site sitemap/catalogue fallbacks to find likely official source pages; it is best-effort rather than a guarantee that every card page is indexed. The importer cannot execute arbitrary browser JavaScript or bypass access controls. When it encounters a client-rendered page, it tries to find relevant same-issuer terms/PDF links and reports source candidates when it still cannot read them. Always confirm that the draft matches the precise card variant and a current official source before publishing.
 
 ## Current implementation boundaries
 
