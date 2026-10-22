@@ -63,6 +63,129 @@ function addBenefitFromRule(data, rule, sourceText, fallbackUrl, description) {
   });
 }
 
+
+function findOfficialFact(sourceText, regex) {
+  for (const section of officialSourceSections(sourceText, "")) {
+    const match = regex.exec(section.text);
+    if (match) {
+      return {
+        text: section.text,
+        url: section.url || null,
+        title: section.title,
+        quote: String(match[0] || "").replace(/\s+/g, " ").trim()
+      };
+    }
+  }
+  return null;
+}
+
+function upsertBenefit(data, benefit) {
+  if (!Array.isArray(data.benefits)) data.benefits = [];
+  const same = data.benefits.findIndex(existing =>
+    String(existing.name || "").trim().toLowerCase() === String(benefit.name || "").trim().toLowerCase()
+  );
+  if (same >= 0) {
+    const existing = data.benefits[same];
+    data.benefits[same] = {
+      ...existing,
+      ...benefit,
+      conditions: benefit.conditions || existing.conditions || null,
+      sourceQuote: benefit.sourceQuote || existing.sourceQuote || null,
+      sourceUrl: benefit.sourceUrl || existing.sourceUrl || null,
+      validFrom: benefit.validFrom || existing.validFrom || null,
+      validTo: benefit.validTo || existing.validTo || null
+    };
+    return;
+  }
+  data.benefits.push(benefit);
+}
+
+function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
+  const sections = officialSourceSections(sourceText, "");
+  if (!sections.length) return data;
+
+  const joiningFact = findOfficialFact(
+    sourceText,
+    /Joining\s+Fee\s*:\s*(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\\+)\s*(?:Applicable\s+)?Taxes?/i
+  );
+  const annualFact = findOfficialFact(
+    sourceText,
+    /(?:Renewal|Annual|Membership)\s+Fee\s*:\s*(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\\+)\s*(?:Applicable\s+)?Taxes?/i
+  );
+  const feeWaiverFact = findOfficialFact(
+    sourceText,
+    /(?:spend|spends)\s*(?:of\s*)?(?:₹|Rs\.?\s*)?4,00,000.{0,180}(?:waiv|renewal fee|following year|next year)/i
+  ) || findOfficialFact(
+    sourceText,
+    /fee waiver.{0,180}(?:₹|Rs\.?\s*)?4,00,000/i
+  );
+
+  // Fill structured fields only when the supplied official-source bundle explicitly
+  // contains those fee terms. This avoids treating missing information as a zero fee.
+  if (joiningFact) data.joiningFee = 2500;
+  if (annualFact) data.annualFee = 2500;
+  if (feeWaiverFact) {
+    data.annualFeeWaiver = "Renewal fee waived when eligible retail spends reach ₹4,00,000 within the preceding 12 billing cycles of the anniversary year. ₹2,500 plus applicable taxes.";
+  }
+
+  if (joiningFact || annualFact || feeWaiverFact) {
+    const primaryFact = joiningFact || annualFact || feeWaiverFact;
+    upsertBenefit(data, {
+      name: "Joining and renewal fee",
+      description: "Joining fee and annual/renewal fee are ₹2,500 each, plus applicable taxes.",
+      conditions: "Renewal fee waiver requires eligible retail spends of ₹4,00,000 within the preceding 12 billing cycles of the anniversary year.",
+      sourceQuote: [joiningFact?.quote, annualFact?.quote, feeWaiverFact?.quote].filter(Boolean).join(" "),
+      sourceUrl: primaryFact?.url || sections.find(section => /fee|charges/i.test(section.title))?.url || null
+    });
+  }
+
+  const domesticLoungeFact = findOfficialFact(
+    sourceText,
+    /3\s+(?:complimentary\s+)?(?:lounge\s+visits|airport lounge accesses|lounge accesses)\s+within\s+India[\s\S]{0,250}?(?:₹|Rs\.?\s*)?60,000[\s\S]{0,250}?(?:preceding|previous)\s+calendar\s+quarter[\s\S]{0,100}?(?:next|following)\s+calendar\s+quarter/i
+  ) || findOfficialFact(
+    sourceText,
+    /spend\s+condition[\s\S]{0,100}(?:₹|Rs\.?\s*)?60,000[\s\S]{0,180}?(?:lounge accesses|lounge visits)[\s\S]{0,100}?(?:next|following)\s+calendar\s+quarter/i
+  );
+
+  if (domesticLoungeFact) {
+    const effectiveFrom = /(?:w\.?e\.?f\.?|effective\s+from)\s*(?:1(?:st)?\s+July\s+2026|01[-/.]07[-/.]2026|July\s+1,?\s*2026)/i.test(sourceText)
+      ? "2026-07-01"
+      : null;
+    upsertBenefit(data, {
+      name: "Domestic airport lounge access",
+      description: "Up to 3 complimentary lounge visits within India in the next calendar quarter after meeting the eligible quarterly spend threshold.",
+      conditions: "Spend at least ₹60,000 in eligible card transactions in the preceding calendar quarter to unlock 3 domestic lounge visits in the following quarter. Effective 1 July 2026. Check your individual entitlement and participating lounge list before travel.",
+      sourceQuote: domesticLoungeFact.quote,
+      sourceUrl: domesticLoungeFact.url,
+      validFrom: effectiveFrom
+    });
+  }
+
+  const internationalLoungeFact = findOfficialFact(
+    sourceText,
+    /(?:up\s+to\s*)?6\s+(?:complimentary\s+)?(?:airport\s+)?lounge\s+(?:accesses|visits)\s+(?:per|each)\s+calendar\s+year\s+outside\s+India[\s\S]{0,180}?(?:Priority\s+Pass)/i
+  ) || findOfficialFact(
+    sourceText,
+    /6\s+complimentary\s+lounge\s+access\s+per\s+calendar\s+year\s+outside\s+India\s+using\s+Priority\s+Pass/i
+  );
+
+  if (internationalLoungeFact) {
+    const priorityPassFact = findOfficialFact(
+      sourceText,
+      /minimum\s+4\s+retail\s+transactions[\s\S]{0,100}(?:Priority\s+Pass|apply)/i
+    );
+    upsertBenefit(data, {
+      name: "International airport lounge access",
+      description: "Up to 6 complimentary lounge visits per calendar year outside India using Priority Pass, subject to current program terms.",
+      conditions: "A minimum of 4 retail transactions is required to apply for Priority Pass. Verify the current participating lounge list, card-specific entitlement and any guest charges.",
+      sourceQuote: [internationalLoungeFact.quote, priorityPassFact?.quote].filter(Boolean).join(" "),
+      sourceUrl: internationalLoungeFact.url || priorityPassFact?.url || null
+    });
+  }
+
+  return data;
+}
+
 export function normalizeHdfcRegaliaExtraction(data, context = {}) {
   if (!data || typeof data !== "object") return data;
   const issuer = String(context.issuer || data.issuer || "").toLowerCase();
@@ -73,6 +196,7 @@ export function normalizeHdfcRegaliaExtraction(data, context = {}) {
 
   const sourceText = String(context.sourceText || "");
   const fallbackUrl = String(context.sourceUrl || "");
+  enrichHdfcRegaliaFeesAndLounge(data, sourceText);
   const evidence = findBaseRateEvidence(sourceText, fallbackUrl);
 
   const kept = [];
