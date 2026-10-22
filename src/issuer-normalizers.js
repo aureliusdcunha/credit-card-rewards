@@ -317,7 +317,9 @@ function extractExplicitCardNetwork(sections) {
     for (const clause of clauses) {
       if (!cues.some(cue => cue.test(clause))) continue;
       const found = CARD_NETWORKS
-        .filter(network => network.pattern.test(clause))
+        .map(network => ({ label: network.label, index: clause.search(network.pattern) }))
+        .filter(network => network.index >= 0)
+        .sort((a, b) => a.index - b.index)
         .map(network => network.label);
       const unique = [...new Set(found)];
       if (!unique.length) continue;
