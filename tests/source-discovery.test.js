@@ -163,3 +163,68 @@ test("auto-extraction can read a discovered .bank.in URL using the same validato
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("automatic extraction fetches multiple HTML candidates concurrently", async () => {
+  const originalFetch = globalThis.fetch;
+  let activeSources = 0;
+  let maxConcurrentSources = 0;
+  const validDraft = {
+    issuer: "Kotak Mahindra Bank",
+    cardName: "Rewards Credit Card",
+    network: null,
+    rewardCurrency: "Points",
+    annualFee: null,
+    joiningFee: null,
+    annualFeeWaiver: null,
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [],
+    missingItems: ["Review current reward rates and fee conditions."],
+    summary: "Draft awaiting review."
+  };
+  const links = [
+    '<a class="result__a" href="https://www.kotak.bank.in/credit-cards/rewards-credit-card">Kotak Rewards Credit Card</a>',
+    '<a class="result__a" href="https://www.kotak.bank.in/credit-cards/rewards-card-terms">Kotak Rewards Card Terms</a>',
+    '<a class="result__a" href="https://www.kotak.bank.in/credit-cards/rewards-card-benefits">Kotak Rewards Card Benefits</a>'
+  ].join("");
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    if (url.hostname === "html.duckduckgo.com") {
+      return new Response("<html>" + links + "</html>", { headers: { "content-type": "text/html" } });
+    }
+    if (url.hostname === "www.kotak.bank.in") {
+      activeSources++;
+      maxConcurrentSources = Math.max(maxConcurrentSources, activeSources);
+      await new Promise(resolve => setTimeout(resolve, 25));
+      activeSources--;
+      return new Response(
+        "<html><head><title>Kotak Rewards Card Official Terms</title></head><body><main>" +
+        "Official card rules. Eligible purchases, exclusions, card benefits and fee conditions. ".repeat(4) +
+        "</main></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "Kotak Mahindra Bank", cardName: "Rewards Credit Card" })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: { async run() { return { response: JSON.stringify(validDraft) }; } }
+    });
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.ok(maxConcurrentSources >= 2, "HTML source requests should overlap rather than run in serial batches");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
