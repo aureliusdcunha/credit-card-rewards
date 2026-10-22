@@ -136,6 +136,52 @@ export function explicitPerAmountFromQuote(sourceQuote) {
   return null;
 }
 
+export function sanitizeIncompleteEarningRules(data) {
+  if (!data || typeof data !== "object" || !Array.isArray(data.rules)) return data;
+  if (!Array.isArray(data.missingItems)) data.missingItems = [];
+  if (!Array.isArray(data.benefits)) data.benefits = [];
+
+  const completeRules = [];
+  for (const rule of data.rules) {
+    if (!rule || typeof rule !== "object") continue;
+    const rate = rule.rate;
+    const perAmount = rule.perAmount;
+    const hasRate = rate !== null && rate !== undefined && rate !== "" &&
+      Number.isFinite(Number(rate)) && Number(rate) >= 0;
+    const hasPerAmount = perAmount !== null && perAmount !== undefined && perAmount !== "" &&
+      Number.isFinite(Number(perAmount)) && Number(perAmount) > 0;
+    const hasUnit = Boolean(String(rule.unit || "").trim());
+
+    if (hasRate && hasPerAmount && hasUnit) {
+      completeRules.push(rule);
+      continue;
+    }
+
+    const quote = String(rule.sourceQuote || "").trim();
+    const missingFields = [
+      !hasRate ? "a numeric reward rate" : null,
+      !hasPerAmount ? "a positive spend denominator (perAmount)" : null,
+      !hasUnit ? "a reward unit" : null
+    ].filter(Boolean);
+    const quoteLabel = quote ? ` Source quote: "${quote}".` : "";
+    const missingMessage = `Incomplete earning claim omitted from calculator rules because it lacks ${missingFields.join(", ")}.${quoteLabel} Verify the issuer's current terms before adding it as a calculable rule.`;
+    if (!data.missingItems.includes(missingMessage)) data.missingItems.push(missingMessage);
+
+    // Preserve an unquantified statement for human review without allowing it into
+    // the numeric rewards engine as if it were a complete earning rule.
+    if (quote && !data.benefits.some(benefit => String(benefit?.sourceQuote || "").trim() === quote)) {
+      data.benefits.push({
+        name: "Unquantified reward claim — review required",
+        description: String(rule.notes || "The source mentions a reward or multiplier but does not provide all numeric fields needed for calculation. Do not use this as an earning rule until the current terms give a complete rate."),
+        conditions: "Confirm the eligible purchase channel, multiplier basis, reward unit, and any daily or monthly cap.",
+        sourceQuote: quote
+      });
+    }
+  }
+  data.rules = completeRules;
+  return data;
+}
+
 export function normalizeDraftCategories(data) {
   if (!data || typeof data !== "object") return data;
 
