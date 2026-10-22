@@ -552,6 +552,17 @@ export function normalizeSbiSimplySaveExtraction(data, context = {}) {
   }
 
   if (newRules.length) {
+    data.rewardCurrency = "Reward Points";
+    const staleRewardSummary = /reward rates? and card network details are not provided in the supplied text\.?/gi;
+    const replacementSummary = newRules.length === 5
+      ? "Base and accelerated reward rates were found in official issuer sources; the payment network was not verified from the supplied text."
+      : "The base reward rate was found, but accelerated rewards remain unverified without complete cap evidence; the payment network was not verified from the supplied text.";
+    if (typeof data.summary === "string") {
+      data.summary = data.summary.replace(staleRewardSummary, replacementSummary).replace(/\s{2,}/g, " ").trim();
+    }
+    if (typeof data.description === "string") {
+      data.description = data.description.replace(staleRewardSummary, replacementSummary).replace(/\s{2,}/g, " ").trim();
+    }
     const handledCategories = new Set(newRules.map(rule => rule.category));
     data.rules = data.rules.filter(rule => {
       const quote = String(rule?.sourceQuote || "") + " " + String(rule?.notes || "");
