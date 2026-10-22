@@ -254,3 +254,29 @@ test("does not treat an accelerated retail-brand rate as a general retail fallba
   const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
   assert.equal(result.unavailable, true);
 });
+
+
+test("corrects a spend-currency unit label to the card reward currency in an Axis comparison", () => {
+  const card = {
+    id: "axis-horizon",
+    name: "Horizon Credit Card",
+    issuer: "Axis Bank",
+    rewardCurrency: "EDGE Miles",
+    reviewStatus: "verified",
+    rules: [{
+      category: "other",
+      rate: 2,
+      perAmount: 100,
+      unit: "INR",
+      status: "approved",
+      sourceQuote: "2 EDGE Miles per ₹100 on other eligible spend."
+    }],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.ok, true);
+  assert.equal(result.points, 500);
+  assert.equal(result.rewardUnit, "EDGE Miles");
+  assert.match(result.explanation, /2 EDGE Miles per ₹100/i);
+  assert.match(result.notes.join(" "), /other eligible spend.*fallback/i);
+});
