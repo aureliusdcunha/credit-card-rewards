@@ -1,6 +1,6 @@
 (() => {
-  const APP_VERSION = "0.6.1";
-  const APP_BUILD = "20261022.24";
+  const APP_VERSION = "0.6.2";
+  const APP_BUILD = "20261022.25";
   const current = location.pathname.split("/").pop() || "index.html";
   const items = [
     ["index.html", "Overview", "⌂"],
