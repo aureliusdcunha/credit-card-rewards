@@ -215,10 +215,17 @@ function combinedMembershipFeeFact(sections) {
     if (!match) continue;
     const amount = Number(match[1].replace(/,/g, ""));
     if (!Number.isFinite(amount) || amount < 0) continue;
+    let quote = quoteForMatch(section.text, match);
+    const tail = String(section.text || "").slice(match.index + match[0].length);
+    const taxSuffix = tail.match(/^\s*(?:\+|plus)\s*(?:applicable\s*)?tax(?:es)?/i)?.[0] || "";
+    if (taxSuffix && !/(?:\+|plus)\s*(?:applicable\s*)?tax(?:es)?/i.test(quote)) {
+      quote = (quote + " " + taxSuffix).replace(/\s+/g, " ").trim();
+    }
     return {
       amount,
       explicitZero: amount === 0,
-      quote: quoteForMatch(section.text, match),
+      taxesApplicable: /(?:\+|plus)\s*(?:applicable\s*)?tax(?:es)?/i.test(quote),
+      quote,
       url: section.url || null,
       title: section.title || null
     };
@@ -404,7 +411,7 @@ export function normalizeCommonCardFacts(data, context = {}) {
     ].filter(Boolean);
     const description = facts.map(({ label, fact }) =>
       label + ": " + (fact.amount === 0 ? "₹0" : "₹" + fact.amount.toLocaleString("en-IN")) +
-      (/\b(?:plus|\+)\s*(?:applicable\s*)?tax(?:es)?\b/i.test(fact.quote) ? " plus applicable taxes" : "")
+      ((fact.taxesApplicable || /\b(?:plus|\+)\s*(?:applicable\s*)?tax(?:es)?\b/i.test(fact.quote)) ? " plus applicable taxes" : "")
     ).join(". ") + ".";
     const quote = facts.map(item => item.fact.quote).join(" ");
     genericUpsertBenefit(data, {
