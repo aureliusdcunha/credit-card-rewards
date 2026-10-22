@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeHdfcRegaliaExtraction } from "../src/issuer-normalizers.js";
+import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts } from "../src/issuer-normalizers.js";
 
 const termsUrl = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-travel-edge-tnc.pdf";
 const cardUrl = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
@@ -209,8 +209,98 @@ test("extracts HDFC Regalia Gold joining/renewal fees, spend waiver and both lou
   assert.match(international.description, /6 complimentary lounge visits/i);
   assert.match(international.conditions, /4 retail transactions/i);
 
-  const fees = draft.benefits.find(item => item.name === "Joining and renewal fee");
+  const fees = draft.benefits.find(item => item.name === "Joining and annual fee");
   assert.ok(fees, "fee benefit should be structured");
   assert.match(fees.description, /₹2,500 each, plus applicable taxes/i);
   assert.equal(fees.sourceUrl, feePage);
+});
+
+
+test("extracts fees, spend-based fee waiver and lounge eligibility for a non-HDFC card", async () => {
+  const sourceUrl = "https://www.axis.bank.in/cards/horizon/fees-and-benefits";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Axis Horizon Credit Card fees and benefits",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Joining Fee: ₹3,000 plus applicable taxes.",
+    "Annual Fee: ₹3,000 plus applicable taxes.",
+    "Spend ₹2,50,000 in the preceding 12 months to waive the renewal fee for the following year.",
+    "Domestic airport lounge access: Cardholders spending ₹50,000 in the preceding calendar quarter receive two visits in the next quarter.",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = {
+    issuer: "Axis Bank",
+    cardName: "Horizon Credit Card",
+    rewardCurrency: "EDGE Miles",
+    annualFee: null,
+    joiningFee: null,
+    annualFeeWaiver: null,
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, { issuer: draft.issuer, cardName: draft.cardName, sourceText, sourceUrl });
+
+  assert.equal(draft.joiningFee, 3000);
+  assert.equal(draft.annualFee, 3000);
+  assert.match(draft.annualFeeWaiver, /₹2,50,000/i);
+  assert.match(draft.annualFeeWaiver, /preceding 12 months/i);
+
+  const fee = draft.benefits.find(item => item.name === "Joining and annual fee");
+  assert.ok(fee);
+  assert.match(fee.description, /Joining fee: ₹3,000 plus applicable taxes/i);
+  assert.match(fee.description, /Annual\/renewal fee: ₹3,000 plus applicable taxes/i);
+  assert.equal(fee.sourceUrl, sourceUrl);
+
+  const lounge = draft.benefits.find(item => item.name === "Domestic lounge access eligibility");
+  assert.ok(lounge);
+  assert.match(lounge.conditions, /₹50,000/i);
+  assert.match(lounge.conditions, /preceding calendar quarter/i);
+  assert.equal(lounge.sourceUrl, sourceUrl);
+});
+
+test("handles explicit no-fee terms for an unrelated issuer without guessing a waiver or lounge threshold", () => {
+  const sourceUrl = "https://www.icici.bank.in/cards/sample/terms";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: ICICI Sample Card Terms",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "No joining fee.",
+    "No annual fee.",
+    "Cardholders can access the lounge subject to the current lounge program terms.",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = {
+    issuer: "ICICI Bank",
+    cardName: "Sample Credit Card",
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+  normalizeCommonCardFacts(draft, { issuer: draft.issuer, cardName: draft.cardName, sourceText, sourceUrl });
+  assert.equal(draft.joiningFee, 0);
+  assert.equal(draft.annualFee, 0);
+  assert.equal(draft.annualFeeWaiver, undefined);
+  assert.equal(draft.benefits.some(item => /lounge access eligibility/i.test(item.name)), false);
+});
+
+test("does not mistake a fee-waiver spend threshold for the actual annual fee", () => {
+  const sourceUrl = "https://issuer.example/terms";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Issuer fees and conditions",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Annual fee waiver: spend ₹4,00,000 in eligible transactions in the previous membership year to waive the next renewal fee.",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = { benefits: [], missingItems: [], rules: [], exclusions: [] };
+  normalizeCommonCardFacts(draft, { sourceText, sourceUrl });
+  assert.equal(draft.annualFee, undefined);
+  assert.match(draft.annualFeeWaiver, /₹4,00,000/);
 });
