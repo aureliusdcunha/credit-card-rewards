@@ -23,7 +23,8 @@ function safeCodePoint(value) {
 }
 
 function attribute(tag, name) {
-  const match = String(tag || "").match(new RegExp("\\b" + name + "\\s*=\\s*([\"'])([\\s\\S]*?)\\1", "i"));
+  const pattern = "(?:^|\\s)" + name + "\\s*=\\s*([\\"'])([\\s\\S]*?)\\1";
+  const match = String(tag || "").match(new RegExp(pattern, "i"));
   return match ? decodeHtmlEntities(match[2]).trim() : "";
 }
 
