@@ -209,7 +209,7 @@ test("extracts HDFC Regalia Gold joining/renewal fees, spend waiver and both lou
   assert.match(international.description, /6 complimentary lounge visits/i);
   assert.match(international.conditions, /4 retail transactions/i);
 
-  const fees = draft.benefits.find(item => item.name === "Joining and renewal fee");
+  const fees = draft.benefits.find(item => item.name === "Joining and annual fee");
   assert.ok(fees, "fee benefit should be structured");
   assert.match(fees.description, /₹2,500 each, plus applicable taxes/i);
   assert.equal(fees.sourceUrl, feePage);
