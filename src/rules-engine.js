@@ -91,8 +91,13 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
       const statesNumericSpendBasis =
         /\b(?:per|every|each)\s+(?:₹|rs\.?\s*|inr\s*)?\s*\d[\d,]*(?:\.\d+)?\b/i.test(detail) ||
         /\b\d[\d,]*(?:\.\d+)?\s*(?:₹|rs\.?|inr)\b/i.test(detail);
-      const accelerated = /\b(?:accelerated|bonus|smartbuy|partner outlets?|select brands?|\d\s*[x×]|multipliers?)\b/i.test(detail);
-      return rule.category !== "general" && statesRetailBasis && statesNumericSpendBasis && !accelerated;
+      const accelerated = /\b(?:accelerated|bonus|smartbuy|partner outlets?|select brands?|myntra|nykaa|reliance digital|\d\s*[x×]|multipliers?)\b/i.test(detail);
+      const categorySpecific = /\b(?:specifically for|only on|only for|on|for|at|via|through)\s+(?:(?:all|other|eligible|domestic|international)\s+)?(?:dining|restaurants?|flights?|hotels?|airline|online shopping|grocery|groceries|fuel|rent|wallet|insurance|utilities|utility and insurance|education|domestic|international)\b/i.test(detail);
+      const looksLikeGenericSpendBasis = statesRetailBasis ||
+        (statesNumericSpendBasis && /\b(?:reward points?|points?|miles?)\b/i.test(detail) &&
+         /\b(?:spent|spend|spends|purchases?)\b/i.test(detail) &&
+         !categorySpecific);
+      return rule.category !== "general" && looksLikeGenericSpendBasis && statesNumericSpendBasis && !accelerated;
     }).sort(byPriority);
     if (retailBaseRules.length) {
       chosen = retailBaseRules[0];
@@ -135,13 +140,28 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
         lastExpiredDate: lastExpired
       };
     }
+    const ruleDiagnostics = dateScopedRules.map(rule => ({
+      category: rule.category || null,
+      status: rule.status || null,
+      rate: rule.rate ?? null,
+      perAmount: rule.perAmount ?? null,
+      unit: normalizeRewardUnit(rule.unit, card.rewardCurrency) || rule.unit || null,
+      validFrom: rule.validFrom || null,
+      validTo: rule.validTo || null,
+      sourceQuote: String(rule.sourceQuote || "").slice(0, 220),
+      notes: String(rule.notes || "").slice(0, 180)
+    }));
     return {
       ok: true, unavailable: true, excluded: false, cardId: card.id, cardName: card.name,
       amount: spend, category, points: null, rewardUnit: card.rewardCurrency || "Rewards", valueINR: null,
       ruleStatus: "missing",
       explanation: "No exact-category rule or verified fallback rule is available for this card and category.",
-      notes: ["Add and review a general eligible-spend rate in the official issuer terms, or select a category for which the card has a verified rule."],
-      sourceUrl: card.officialUrl || null
+      notes: ["No source-quoted base rate matched the fallback rules. Inspect the saved rule categories, units, validity dates and source quotes; do not treat accelerated multipliers as base rates."],
+      sourceUrl: card.officialUrl || null,
+      cardReviewStatus: card.reviewStatus || "unknown",
+      selectedDate: date,
+      selectedCategory: category,
+      ruleDiagnostics
     };
   }
 
@@ -212,7 +232,11 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
 
   const ruleDescription = fallbackKind === "retail_base"
     ? "base retail-spend fallback"
-    : chosen.category === "general" ? "base" : "category-specific";
+    : fallbackKind === "other_spend"
+      ? "other-eligible-spend fallback"
+      : fallbackKind === "domestic"
+        ? "domestic-spend fallback"
+        : fallbackKind === "general" || chosen.category === "general" ? "base" : "category-specific";
   return {
     ok: true, excluded: false, capped, cardId: card.id, cardName: card.name, amount: spend,
     eligibleAmount, points, rewardUnit: selectedUnit, valueINR: null,

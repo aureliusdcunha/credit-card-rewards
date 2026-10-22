@@ -280,3 +280,56 @@ test("corrects a spend-currency unit label to the card reward currency in an Axi
   assert.match(result.explanation, /2 EDGE Miles per ₹100/i);
   assert.match(result.notes.join(" "), /other eligible spend.*fallback/i);
 });
+
+
+test("uses Regalia Gold's generic numeric base-rate quote even when the quote omits the words retail spends", () => {
+  const card = {
+    id: "hdfc-regalia-gold",
+    name: "Regalia Gold",
+    issuer: "HDFC Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [{
+      category: "online_shopping",
+      rate: 5,
+      perAmount: 200,
+      unit: "Reward Points",
+      status: "approved",
+      validFrom: "2026-05-15",
+      sourceQuote: "5 Reward Points on every Rs. 200 spent"
+    }],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.ok, true);
+  assert.equal(result.unavailable, undefined);
+  assert.equal(result.points, 625);
+  assert.equal(result.rewardUnit, "Reward Points");
+  assert.match(result.notes.join(" "), /base rate explicitly quoted for retail spends/i);
+});
+
+test("includes persisted rule metadata when no safe comparison fallback matches", () => {
+  const card = {
+    id: "hdfc-accelerated-only",
+    name: "Regalia Gold",
+    issuer: "HDFC Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [{
+      category: "online_shopping",
+      rate: 5,
+      perAmount: 200,
+      unit: "Reward Points",
+      status: "approved",
+      validFrom: "2026-05-15",
+      sourceQuote: "5X Reward Points on spends at select brands including Myntra and Nykaa"
+    }],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.unavailable, true);
+  assert.equal(result.ruleDiagnostics.length, 1);
+  assert.equal(result.ruleDiagnostics[0].category, "online_shopping");
+  assert.equal(result.ruleDiagnostics[0].rate, 5);
+  assert.match(result.ruleDiagnostics[0].sourceQuote, /5X Reward Points/i);
+});
