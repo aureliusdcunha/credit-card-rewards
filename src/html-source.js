@@ -107,7 +107,7 @@ function focusCardSection(html, cardName) {
   if (!target) return null;
   const targetTokens = target.split(" ").filter(Boolean);
   const cleanHtml = String(html || "").replace(OMIT_COMMENTS, " ").replace(OMIT_BLOCKS, " ");
-  const headings = [...cleanHtml.matchAll(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi)].map(match => {
+  const allHeadings = [...cleanHtml.matchAll(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi)].map(match => {
     const heading = textFromMarkup(match[2]);
     const normalized = normalizeHeading(heading);
     const tokens = normalized.split(" ").filter(Boolean);
@@ -115,11 +115,12 @@ function focusCardSection(html, cardName) {
     const coverage = targetTokens.length ? overlap / targetTokens.length : 0;
     const score = normalized === target ? 1000 : coverage * 100 - Math.abs(tokens.length - targetTokens.length) * 3;
     return { level: Number(match[1]), index: match.index, end: match.index + match[0].length, heading, normalized, coverage, score };
-  }).filter(item => item.coverage >= 0.75 && item.heading);
-  if (!headings.length) return null;
-  headings.sort((a, b) => b.score - a.score || a.heading.length - b.heading.length);
-  const selected = headings[0];
-  const nextHeading = headings
+  });
+  const matches = allHeadings.filter(item => item.coverage >= 0.75 && item.heading);
+  if (!matches.length) return null;
+  matches.sort((a, b) => b.score - a.score || a.heading.length - b.heading.length);
+  const selected = matches[0];
+  const nextHeading = allHeadings
     .filter(item => item.index > selected.index && item.level <= selected.level)
     .sort((a, b) => a.index - b.index)[0];
   const sectionHtml = cleanHtml.slice(selected.index, nextHeading ? nextHeading.index : cleanHtml.length);
