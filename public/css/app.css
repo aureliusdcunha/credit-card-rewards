@@ -45,3 +45,72 @@ input,select,textarea{width:100%;border:1px solid #d6e1eb;border-radius:9px;padd
 .benefit-detail-row small{display:block;white-space:normal;overflow-wrap:anywhere;line-height:1.55;margin-top:5px}
 .benefit-detail-row .benefit-source-quote{padding:8px 10px;border-left:3px solid var(--border,#d9e2ef);background:rgba(240,245,251,.72);border-radius:0 7px 7px 0}
 .benefit-detail-row .benefit-source-link{display:inline-flex;margin-top:7px;font-size:11px}
+
+
+/* Card details modal with Benefits, Rules, Restrictions and Fees tabs */
+body.card-modal-open{overflow:hidden}
+.card-modal-backdrop{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:20px;background:rgba(13,28,49,.56);backdrop-filter:blur(5px)}
+.card-modal-backdrop[hidden]{display:none}
+.card-modal-dialog{display:flex;flex-direction:column;width:min(960px,100%);max-height:min(850px,calc(100vh - 40px));min-height:360px;overflow:hidden;border:1px solid var(--border,#d9e2ef);border-radius:20px;background:var(--surface,#fff);box-shadow:0 28px 90px rgba(7,24,45,.27);outline:none}
+.card-modal-header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:24px 26px 18px;border-bottom:1px solid var(--border,#d9e2ef)}
+.card-modal-title-group{min-width:0}
+.card-modal-title-group h2{font-size:25px;letter-spacing:-.035em;margin:6px 0 5px;color:var(--ink,#102b46)}
+.card-modal-title-group p{margin:0;color:var(--muted,#687993);font-size:12px;line-height:1.5}
+.card-modal-close{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border:1px solid var(--border,#d9e2ef);border-radius:11px;background:#fff;color:var(--ink,#102b46);font-size:25px;line-height:1;cursor:pointer}
+.card-modal-close:hover{background:#f1f6fc}
+.card-modal-tabs{display:flex;gap:6px;overflow-x:auto;padding:12px 26px 0;border-bottom:1px solid var(--border,#d9e2ef)}
+.card-modal-tabs [role=tab]{flex:0 0 auto;position:relative;border:0;border-radius:9px 9px 0 0;padding:12px 16px 13px;background:transparent;color:var(--muted,#687993);font-size:12px;font-weight:750;cursor:pointer;white-space:nowrap}
+.card-modal-tabs [role=tab]:hover{background:#f5f8fc;color:var(--ink,#102b46)}
+.card-modal-tabs [role=tab][aria-selected=true]{background:#edf4ff;color:#225edb}
+.card-modal-tabs [role=tab][aria-selected=true]:after{position:absolute;content:"";height:3px;background:#2b63df;border-radius:3px 3px 0 0;bottom:0;left:13px;right:13px}
+.card-modal-tabs [role=tab]:focus-visible,.card-modal-close:focus-visible{outline:3px solid rgba(43,99,223,.3);outline-offset:2px}
+.card-modal-panel{flex:1;overflow:auto;overscroll-behavior:contain;padding:20px 26px 24px;min-height:0}
+.modal-section-intro{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.modal-section-intro p{margin:0;color:var(--muted,#687993);font-size:12px;line-height:1.5}
+.modal-section-intro>span{flex:0 0 auto;border:1px solid var(--border,#d9e2ef);border-radius:999px;padding:5px 9px;color:var(--muted,#687993);font-size:10px;font-weight:700}
+.modal-item-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.modal-info-item{min-width:0;border:1px solid var(--border,#d9e2ef);border-radius:13px;padding:15px;background:#fff}
+.modal-info-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.modal-info-item h3{font-size:13px;line-height:1.45;margin:0;color:var(--ink,#102b46)}
+.modal-info-item p{font-size:12px;line-height:1.65;color:var(--muted,#687993);margin:5px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.modal-detail-line{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.3fr);gap:12px;padding-top:9px;margin-top:9px;border-top:1px solid #edf1f6;font-size:11px;line-height:1.5}
+.modal-detail-line strong{color:var(--ink,#102b46);font-weight:700}
+.modal-detail-line span{color:var(--muted,#687993);overflow-wrap:anywhere}
+.modal-source-quote{margin:12px 0 0;padding:10px 12px;border-left:3px solid #c9d9f3;border-radius:0 8px 8px 0;background:#f4f7fc;color:#53657b;font-size:11px;line-height:1.65;overflow-wrap:anywhere}
+.modal-source-quote strong{font-size:10px;color:var(--ink,#102b46)}
+.modal-source-link{display:inline-flex;margin-top:12px;font-size:11px;font-weight:700}
+.modal-source-missing{display:block;margin-top:12px;color:var(--muted,#8a98aa);font-size:10px}
+.modal-rate-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;margin:12px 0;color:#2460d7}
+.modal-rate-line strong{font-size:18px;letter-spacing:-.025em}
+.modal-rate-line span{font-size:11px;color:var(--muted,#687993)}
+.modal-rule-notes{padding:9px 10px;border-radius:8px;background:#f5f8fc}
+.modal-empty{border:1px dashed #cad6e5;border-radius:13px;padding:25px 20px;text-align:center;background:#f8fafd}
+.modal-empty strong{font-size:13px;color:var(--ink,#102b46)}
+.modal-empty p{max-width:530px;margin:7px auto 0;color:var(--muted,#687993);font-size:12px;line-height:1.6}
+.modal-subsection-title{font-size:13px;color:var(--ink,#102b46);margin:22px 0 11px}
+.modal-muted-note{font-size:11px;line-height:1.6;color:var(--muted,#687993);margin:7px 0 12px}
+.modal-compact-item{padding:12px}
+.modal-fee-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.modal-fee-card{display:flex;flex-direction:column;gap:9px;padding:18px;border:1px solid var(--border,#d9e2ef);border-radius:13px;background:#f8fafd}
+.modal-fee-card span{color:var(--muted,#687993);font-size:11px;font-weight:650}
+.modal-fee-card strong{color:var(--ink,#102b46);font-size:18px;line-height:1.4}
+.modal-fee-waiver{margin-bottom:12px}
+.card-modal-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 26px;border-top:1px solid var(--border,#d9e2ef);background:#fbfcfe}
+.card-modal-footer .pill{display:inline-flex}
+@media(max-width:700px){
+  .card-modal-backdrop{padding:0;align-items:end}
+  .card-modal-dialog{width:100%;max-height:94vh;min-height:65vh;border-radius:18px 18px 0 0;border-bottom:0}
+  .card-modal-header{padding:18px 17px 14px}
+  .card-modal-title-group h2{font-size:21px}
+  .card-modal-tabs{padding:10px 12px 0;gap:2px}
+  .card-modal-tabs [role=tab]{padding:11px 12px 12px;font-size:11px}
+  .card-modal-panel{padding:15px 15px 22px}
+  .modal-item-list{grid-template-columns:minmax(0,1fr)}
+  .modal-fee-grid{grid-template-columns:minmax(0,1fr)}
+  .modal-section-intro{align-items:flex-start;flex-direction:column;gap:7px}
+  .card-modal-footer{padding:12px 16px}
+}
+@media(prefers-reduced-motion:no-preference){
+  .card-modal-dialog{animation:card-modal-enter .16s ease-out}
+  @keyframes card-modal-enter{from{transform:translateY(8px);opacity:.82}to{transform:translateY(0);opacity:1}}
+}
