@@ -103,12 +103,54 @@ function addReviewNote(existing, message) {
   return [String(existing || "").trim(), message].filter(Boolean).join(" ");
 }
 
+export function explicitPerAmountFromQuote(sourceQuote) {
+  const quote = String(sourceQuote || "").replace(/\s+/g, " ").trim();
+  if (!quote) return null;
+
+  const amountPattern = "([0-9][0-9,]*(?:\\.[0-9]+)?)";
+  const currencyPrefix = "(?:₹|rs\\.?|inr|rupees?)\\s*";
+  const currencySuffix = "\\s*(?:₹|rs\\.?|inr|rupees?)";
+  const amountThenSpend = new RegExp(
+    "(?:per|for each|for every|on every|every)\\s*" + amountPattern +
+    "\\s+(?:(?:rupees?|inr|rs\\.?)\\s+)?(?:eligible\\s+)?(?:spend|spent|purchase value|transaction amount)\\b",
+    "i"
+  );
+  const patterns = [
+    new RegExp("(?:per|for each|for every|on every|every)\\s*" + currencyPrefix + amountPattern, "i"),
+    new RegExp("(?:per|for each|for every|on every|every)\\s*" + amountPattern + currencySuffix, "i"),
+    amountThenSpend
+  ];
+
+  for (const pattern of patterns) {
+    const match = quote.match(pattern);
+    if (!match) continue;
+    const amount = Number(String(match[1]).replace(/,/g, ""));
+    if (Number.isFinite(amount) && amount > 0) return amount;
+  }
+  return null;
+}
+
 export function normalizeDraftCategories(data) {
   if (!data || typeof data !== "object") return data;
 
   if (Array.isArray(data.rules)) {
     for (const rule of data.rules) {
       if (!rule || typeof rule !== "object") continue;
+
+      // Recover the spend denominator only when the verbatim quote explicitly states it.
+      // Never replace zero/missing values with an arbitrary default.
+      const currentPerAmount = Number(rule.perAmount);
+      if ((!Number.isFinite(currentPerAmount) || currentPerAmount <= 0) && rule.sourceQuote) {
+        const quotedPerAmount = explicitPerAmountFromQuote(rule.sourceQuote);
+        if (quotedPerAmount != null) {
+          rule.perAmount = quotedPerAmount;
+          rule.notes = addReviewNote(
+            rule.notes,
+            `perAmount was set to ${quotedPerAmount} because the source quote explicitly states this spend basis. Verify the basis against the issuer terms before publishing.`
+          );
+        }
+      }
+
       const original = String(rule.category ?? "").trim();
       const normalized = normalizeCategory(original);
       if (normalized !== original && CATEGORIES.includes(normalized)) {
