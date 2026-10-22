@@ -132,7 +132,7 @@ async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}, cardName
     const body = await response.text();
     if (body.length > MAX_HTML_BYTES) throw new Error("The page is too large for this importer. Paste only the relevant reward and exclusion sections.");
     const document = extractOfficialHtml(body, current.toString(), cardName);
-    if (document.text.length < 100 && relatedDepth < 1 && document.relatedUrls.length) {
+    if (document.readableTextLength < 100 && relatedDepth < 1 && document.relatedUrls.length) {
       // Modern issuer pages may render the card details client-side while linking
       // to a server-readable official terms PDF or conditions page. Follow only
       // a small set of allow-listed links on the same issuer domain.
@@ -143,7 +143,7 @@ async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}, cardName
       for (const related of followups) {
         try {
           const nested = await fetchOfficialSource(related.url, aiBinding, providerEnv, cardName, relatedDepth + 1);
-          if (nested.text && nested.text.length >= 100) {
+          if (nested.text && (nested.readableTextLength ?? nested.text.length) >= 100) {
             return { ...nested, discoveredFrom: current.toString(), parentTitle: document.title };
           }
         } catch (error) {
@@ -287,7 +287,7 @@ async function aiExtract(request, env) {
       sourceText = fetched.text;
       sourceTitle = fetched.title;
       intake.sourceUrl = fetched.url;
-      if (!sourceText || sourceText.trim().length < 100) {
+      if (!sourceText || (fetched.readableTextLength ?? sourceText.trim().length) < 100) {
         const relatedSources = (fetched.relatedUrls || []).slice(0, 5);
         return json({
           error: fetched.javascriptHeavy
@@ -507,7 +507,7 @@ async function autoExtractCardWithTrace(request, env, trace) {
   const readCandidate = async candidate => {
     try {
       const fetched = await fetchOfficialSource(candidate.url, env.AI, env, cardName);
-      if (!fetched.text || fetched.text.length < 100) {
+      if (!fetched.text || (fetched.readableTextLength ?? fetched.text.length) < 100) {
         return {
           candidate,
           skipped: true,
