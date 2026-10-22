@@ -91,6 +91,32 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   }
 
   if (!chosen) {
+    // If all approved/demo rules are outside the requested transaction date, say so
+    // explicitly rather than describing this as a missing category rule.
+    const dateScopedRules = (card.rules || []).filter(rule => ["approved", "demo"].includes(rule.status));
+    const futureRules = dateScopedRules.filter(rule => rule.validFrom && rule.validFrom > date);
+    const expiredRules = dateScopedRules.filter(rule => rule.validTo && rule.validTo < date);
+    if (eligibleRules.length === 0 && dateScopedRules.length > 0 && (futureRules.length || expiredRules.length)) {
+      const dates = [
+        ...futureRules.map(rule => String(rule.validFrom)).filter(Boolean),
+        ...expiredRules.map(rule => String(rule.validTo)).filter(Boolean)
+      ].sort();
+      const firstFuture = futureRules.map(rule => String(rule.validFrom)).filter(Boolean).sort()[0] || null;
+      const lastExpired = expiredRules.map(rule => String(rule.validTo)).filter(Boolean).sort().slice(-1)[0] || null;
+      const explanation = firstFuture && firstFuture > date
+        ? `The selected transaction date (${date}) is before the available rules become effective (${firstFuture}). Select a date on or after ${firstFuture}, or correct the rules' effective dates if the issuer terms support an earlier date.`
+        : `The selected transaction date (${date}) is after the available rules expired (${lastExpired}). Review the current issuer terms before calculating this historical transaction.`;
+      return {
+        ok: true, unavailable: true, excluded: false, cardId: card.id, cardName: card.name,
+        amount: spend, category, points: null, rewardUnit: card.rewardCurrency || "Rewards", valueINR: null,
+        ruleStatus: "date_mismatch", explanation,
+        notes: ["The calculator does not apply rules outside their configured validity period. Missing effective dates default to the date the reviewed rules were published; adjust them only when the issuer's effective date is confirmed."],
+        sourceUrl: card.officialUrl || null,
+        selectedDate: date,
+        firstFutureEffectiveDate: firstFuture,
+        lastExpiredDate: lastExpired
+      };
+    }
     return {
       ok: true, unavailable: true, excluded: false, cardId: card.id, cardName: card.name,
       amount: spend, category, points: null, rewardUnit: card.rewardCurrency || "Rewards", valueINR: null,
