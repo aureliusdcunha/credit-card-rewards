@@ -154,7 +154,7 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
   );
 
   if (domesticLoungeFact) {
-    const effectiveFrom = /(?:w\.?e\.?f\.?|effective\s+from)\s*(?:1(?:st)?\s+July\s+2026|01[-/.]07[-/.]2026|July\s+1,?\s*2026)/i.test(sourceText)
+    const effectiveFrom = /(?:w\.?e\.?f\.?|effective\s+from)\s*[:\-]?\s*(?:1(?:st)?\s+July\s+2026|01[-/.]07[-/.]2026|July\s+1,?\s*2026)/i.test(sourceText)
       ? "2026-07-01"
       : null;
     upsertBenefit(data, {
