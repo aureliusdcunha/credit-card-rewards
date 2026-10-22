@@ -175,13 +175,31 @@ function knownOfficialFallbacks(issuer, cardName) {
     return [
       {
         url: "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card",
-        title: "HDFC Bank Regalia Gold Credit Card",
+        title: "HDFC Bank Regalia Gold Credit Card — current benefits and reward rates",
         domain: "www.hdfc.bank.in",
-        score: 110
+        score: 140
+      },
+      {
+        url: "https://v.hdfc.bank.in/regalia-gold/features.html",
+        title: "HDFC Bank Regalia Gold — rewards, dining and travel features",
+        domain: "v.hdfc.bank.in",
+        score: 138
+      },
+      {
+        url: "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-travel-edge-tnc.pdf",
+        title: "HDFC Bank Regalia Gold — reward changes effective 15 May 2026 and Travel Edge terms",
+        domain: "www.hdfc.bank.in",
+        score: 136
+      },
+      {
+        url: "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/terms-and-conditions.pdf",
+        title: "HDFC Bank Regalia Gold Credit Card — general terms and conditions",
+        domain: "www.hdfc.bank.in",
+        score: 134
       },
       {
         url: "https://www.hdfcbank.com/content/bbp/repositories/723fb80a-2dde-42a3-9793-7ae1be57c87f/?path=%2FPersonal%2FPay%2FCards%2FCredit+Card%2FCredit+Card+Landing+Page%2FCredit+Cards%2FSuper+Premium%2FRegalia+Gold+Credit+Card%2FRG-T-and-Cs-PDF.pdf",
-        title: "HDFC Bank Regalia Gold Credit Card General Terms and Conditions",
+        title: "HDFC Bank Regalia Gold Credit Card General Terms and Conditions — legacy official URL",
         domain: "www.hdfcbank.com",
         score: 109
       }
