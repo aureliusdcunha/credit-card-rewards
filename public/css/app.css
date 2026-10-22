@@ -19,3 +19,7 @@ input,select,textarea{width:100%;border:1px solid #d6e1eb;border-radius:9px;padd
 .card-admin-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px;padding-top:9px;border-top:1px solid #edf2f7}
 .card-archive-button{font-size:10px!important;padding:7px 10px!important;min-height:30px}
 .card-archive-button:disabled{opacity:.65;cursor:not-allowed}
+
+
+.compare-detail-notes{margin:8px 0 0;padding-left:17px;color:var(--muted);font-size:11px;line-height:1.6}
+.compare-detail-notes li+li{margin-top:4px}
