@@ -92,7 +92,7 @@ export function normalizeCategory(value) {
   if (!original) return original;
   const key = original.toLowerCase()
     .normalize("NFKD")
-    .replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
   if (CATEGORIES.includes(key)) return key;
