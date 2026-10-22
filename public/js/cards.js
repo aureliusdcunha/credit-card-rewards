@@ -8,15 +8,77 @@
   const count = document.getElementById("cards-count");
   const queryCardId = new URLSearchParams(location.search).get("id");
 
-  function cardDetails(card) {
-    const rules = card.rules || [];
-    const exclusions = card.exclusions || [];
-    const benefits = card.benefits || [];
-    return `<div class="detail-panel"><div class="detail-heading"><strong>Reward rules</strong><span>${rules.length} rule(s)</span></div>${rules.length ? `<div class="rule-list">${rules.map(rule => `<div class="rule-row"><div><b>${C.escapeHtml(C.prettyCategory(rule.category))}</b><small>${C.escapeHtml(rule.notes || "No notes supplied.")}</small></div><div class="rule-rate"><strong>${C.escapeHtml(C.formatNumber(rule.rate))}</strong><small>${C.escapeHtml(rule.unit)} / ₹${C.escapeHtml(C.formatNumber(rule.perAmount))}</small><span class="pill ${rule.status === "approved" ? "pill-green" : "pill-amber"}">${C.escapeHtml(C.statusLabel(rule.status))}</span></div></div>`).join("")}</div>` : '<p class="field-help detail-empty">No reward rules have been approved for this card yet. Import the official issuer terms to extract them.</p>'}
-      <div class="detail-heading detail-heading-spaced"><strong>Excluded categories</strong><span>${exclusions.length} listed</span></div>${exclusions.length ? `<div class="exclusion-pills">${exclusions.map(ex => `<span class="exclusion-tag">${C.escapeHtml(C.prettyCategory(ex.category))}${ex.status !== "approved" ? " · demo" : ""}</span>`).join("")}</div>` : '<p class="field-help detail-empty">No exclusions are configured. This does not mean the card has no exclusions.</p>'}
-      <div class="detail-heading detail-heading-spaced"><strong>Benefits & perks</strong><span>${benefits.length} recorded</span></div>${benefits.length ? `<div class="rule-list">${benefits.map(benefit => { const sourceUrl = benefit.sourceUrl || card.officialUrl; const validity = [benefit.validFrom ? `From ${benefit.validFrom}` : "", benefit.validTo ? `until ${benefit.validTo}` : ""].filter(Boolean).join(" "); return `<div class="rule-row benefit-detail-row"><div><b>${C.escapeHtml(benefit.name)}</b><small>${C.escapeHtml(benefit.description || "No description supplied.")}</small>${benefit.conditions ? `<small><strong>Conditions:</strong> ${C.escapeHtml(benefit.conditions)}</small>` : ""}${benefit.sourceQuote ? `<small class="benefit-source-quote"><strong>Issuer quote:</strong> “${C.escapeHtml(benefit.sourceQuote)}”</small>` : ""}${validity ? `<small><strong>Validity:</strong> ${C.escapeHtml(validity)}</small>` : ""}${sourceUrl ? `<a class="text-link benefit-source-link" href="${C.escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">Open supporting issuer source ↗</a>` : ""}</div>${benefit.status ? C.statusPill(benefit.status) : ""}</div>`; }).join("")}</div>` : '<p class="field-help detail-empty">No lounge, milestone, fee, insurance or other benefits have been published yet.</p>'}
-      <div class="tile-bottom source-row"><span class="source-indicator ${card.reviewStatus === "verified" ? "verified" : ""}">${C.escapeHtml(card.sourceDate || "Source date not recorded")}</span>${card.officialUrl ? `<a class="text-link" href="${C.escapeHtml(card.officialUrl)}" target="_blank" rel="noopener noreferrer">Open official source ↗</a>` : ""}<a class="text-link" href="/sources.html">Review source →</a></div></div>`;
+  const modal = document.getElementById("card-detail-modal");
+  const modalDialog = modal?.querySelector(".card-modal-dialog");
+  const modalTitle = document.getElementById("card-modal-title");
+  const modalSubtitle = document.getElementById("card-modal-subtitle");
+  const modalPanel = document.getElementById("card-modal-panel");
+  const modalStatus = document.getElementById("card-modal-review-status");
+  const modalClose = document.getElementById("card-modal-close");
+  const modalTabs = [...document.querySelectorAll("[data-modal-tab]")];
+  let activeModalCard = null;
+  let activeModalTab = "benefits";
+  let modalReturnFocus = null;
+
+  function selectModalTab(tab, moveFocus = false) {
+    if (!activeModalCard || !modalPanel || !window.CRI_CARD_MODAL) return;
+    const allowedTabs = ["benefits", "rules", "restrictions", "fees"];
+    activeModalTab = allowedTabs.includes(tab) ? tab : "benefits";
+    modalTabs.forEach(button => {
+      const selected = button.dataset.modalTab === activeModalTab;
+      button.setAttribute("aria-selected", selected ? "true" : "false");
+      button.tabIndex = selected ? 0 : -1;
+      if (selected && moveFocus) button.focus();
+    });
+    const selectedButton = modalTabs.find(button => button.dataset.modalTab === activeModalTab);
+    if (selectedButton) modalPanel.setAttribute("aria-labelledby", selectedButton.id);
+    modalPanel.innerHTML = window.CRI_CARD_MODAL.renderTab(activeModalCard, activeModalTab);
+    modalPanel.scrollTop = 0;
   }
+
+  function openCardModal(card, trigger) {
+    if (!modal || !card) return;
+    activeModalCard = card;
+    modalReturnFocus = trigger || document.activeElement;
+    activeModalTab = "benefits";
+    modalTitle.textContent = card.name || "Card details";
+    modalSubtitle.textContent = [card.issuer, card.rewardCurrency || "Rewards", card.network || "Network not recorded"].filter(Boolean).join(" · ");
+    modalStatus.innerHTML = C.statusPill(card.reviewStatus);
+    modal.hidden = false;
+    document.body.classList.add("card-modal-open");
+    selectModalTab("benefits");
+    modalClose?.focus();
+  }
+
+  function closeCardModal() {
+    if (!modal || modal.hidden) return;
+    modal.hidden = true;
+    document.body.classList.remove("card-modal-open");
+    activeModalCard = null;
+    if (modalReturnFocus && typeof modalReturnFocus.focus === "function") modalReturnFocus.focus();
+    modalReturnFocus = null;
+  }
+
+  modalClose?.addEventListener("click", closeCardModal);
+  modal?.addEventListener("click", event => {
+    if (event.target === modal) closeCardModal();
+  });
+  modal?.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCardModal();
+      return;
+    }
+    if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && event.target?.matches?.("[data-modal-tab]")) {
+      event.preventDefault();
+      const currentIndex = modalTabs.indexOf(event.target);
+      const delta = event.key === "ArrowRight" ? 1 : -1;
+      const next = modalTabs[(currentIndex + delta + modalTabs.length) % modalTabs.length];
+      if (next) selectModalTab(next.dataset.modalTab, true);
+    }
+  });
+  modalTabs.forEach(button => button.addEventListener("click", () => selectModalTab(button.dataset.modalTab)));
+
   function render() {
     const term = search.value.trim().toLowerCase();
     const issuerVal = issuer.value;
@@ -31,12 +93,7 @@
     grid.innerHTML = filtered.length ? filtered.map(card => C.renderCardTile(card)).join("") : '<div class="empty-state"><h3>No matching cards</h3><p>Try a different bank or search term.</p></div>';
     document.querySelectorAll(".view-rules-button").forEach(button => button.addEventListener("click", () => {
       const card = allCards.find(item => item.id === button.dataset.cardId);
-      const expanded = document.getElementById(`expanded-${button.dataset.cardId}`);
-      if (!card || !expanded) return;
-      const opening = expanded.hidden;
-      expanded.hidden = !opening;
-      if (opening) expanded.innerHTML = cardDetails(card);
-      button.textContent = opening ? "Hide rules ↑" : "View benefits & rules ↗";
+      if (card) openCardModal(card, button);
     }));
 
     // Catalogue maintenance is available only in a tab with the admin token set in
