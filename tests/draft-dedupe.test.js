@@ -5,6 +5,7 @@ import {
   draftIdentity,
   normalizeSourceUrl
 } from "../src/draft-dedupe.js";
+import { getDrafts } from "../src/db.js";
 
 test("deduplicates retries for the same issuer and card variant, keeping the newest draft", () => {
   const rows = [
