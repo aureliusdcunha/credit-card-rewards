@@ -1,6 +1,6 @@
 export const CATEGORIES = [
   "general", "airline_direct", "travel_edge", "travel_agency", "hotel_direct", "travel_portal",
-  "groceries", "dining", "online_shopping", "utilities", "insurance", "education", "government",
+  "groceries", "dining", "movies", "departmental_stores", "online_shopping", "utilities", "insurance", "education", "government",
   "wallet", "rent", "fuel", "transport_tolls", "emi", "jewellery", "cash_advance", "international",
   "domestic", "other"
 ];
@@ -41,6 +41,15 @@ const CATEGORY_ALIASES = {
 
   restaurant: "dining",
   restaurants: "dining",
+  movie: "movies",
+  movie_theater: "movies",
+  movie_theaters: "movies",
+  cinema: "movies",
+  cinemas: "movies",
+  departmental_store: "departmental_stores",
+  department_store: "departmental_stores",
+  department_stores: "departmental_stores",
+  department_store_spend: "departmental_stores",
   food: "dining",
   food_delivery: "dining",
   dining_and_restaurants: "dining",
