@@ -106,18 +106,21 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
 
   const joiningFact = findOfficialFact(
     sourceText,
-    /Joining\s+Fee\s*:\s*(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\\+)\s*(?:Applicable\s+)?Taxes?/i
+    /Joining\s+Fee\s*:\s*(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\+)\s*(?:Applicable\s+)?Taxes?/i
   );
   const annualFact = findOfficialFact(
     sourceText,
-    /(?:Renewal|Annual|Membership)\s+Fee\s*:\s*(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\\+)\s*(?:Applicable\s+)?Taxes?/i
+    /(?:Renewal|Annual|Membership)\s+Fee\s*:\s*(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\+)\s*(?:Applicable\s+)?Taxes?/i
   );
   const feeWaiverFact = findOfficialFact(
     sourceText,
-    /(?:spend|spends)\s*(?:of\s*)?(?:₹|Rs\.?\s*)?4,00,000.{0,180}(?:waiv|renewal fee|following year|next year)/i
+    /(?:spend|spends).{0,80}(?:₹\s*|Rs\.?\s*)?4,00,000.{0,180}(?:waiv|renewal fee|following year|next year)/i
   ) || findOfficialFact(
     sourceText,
-    /fee waiver.{0,180}(?:₹|Rs\.?\s*)?4,00,000/i
+    /fee waiver.{0,180}(?:₹\s*|Rs\.?\s*)?4,00,000/i
+  ) || findOfficialFact(
+    sourceText,
+    /renewal fee.{0,180}(?:₹\s*|Rs\.?\s*)?4,00,000/i
   );
 
   // Fill structured fields only when the supplied official-source bundle explicitly
@@ -141,10 +144,13 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
 
   const domesticLoungeFact = findOfficialFact(
     sourceText,
-    /3\s+(?:complimentary\s+)?(?:lounge\s+visits|airport lounge accesses|lounge accesses)\s+within\s+India[\s\S]{0,250}?(?:₹|Rs\.?\s*)?60,000[\s\S]{0,250}?(?:preceding|previous)\s+calendar\s+quarter[\s\S]{0,100}?(?:next|following)\s+calendar\s+quarter/i
+    /3\s+(?:complimentary\s+)?(?:lounge\s+visits|airport lounge accesses|lounge accesses)\s+within\s+India[\s\S]{0,250}?(?:₹\s*|Rs\.?\s*)?60,000[\s\S]{0,250}?(?:preceding|previous)\s+calendar\s+quarter/i
   ) || findOfficialFact(
     sourceText,
-    /spend\s+condition[\s\S]{0,100}(?:₹|Rs\.?\s*)?60,000[\s\S]{0,180}?(?:lounge accesses|lounge visits)[\s\S]{0,100}?(?:next|following)\s+calendar\s+quarter/i
+    /spend\s+condition[\s\S]{0,100}(?:₹\s*|Rs\.?\s*)?60,000[\s\S]{0,180}?(?:lounge accesses|lounge visits)[\s\S]{0,100}?(?:next|following)\s+calendar\s+quarter/i
+  ) || findOfficialFact(
+    sourceText,
+    /(?:₹\s*|Rs\.?\s*)?60,000.{0,180}(?:3|three)\s+(?:airport\s+)?lounge\s+(?:accesses|visits)[\s\S]{0,100}(?:next|following)\s+calendar\s+quarter/i
   );
 
   if (domesticLoungeFact) {
