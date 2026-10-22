@@ -97,10 +97,10 @@ export function parseDuckDuckGoResults(html, expectedDomain = null) {
 export function parseBingRssResults(xml, expectedDomain = null) {
   const results = [];
   const seen = new Set();
-  for (const match of String(xml || "").matchAll(/<item\\b[^>]*>([\\s\\S]*?)<\\/item>/gi)) {
+  for (const match of String(xml || "").matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
     const item = match[1] || "";
-    const titleMatch = item.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i);
-    const linkMatch = item.match(/<link[^>]*>([\\s\\S]*?)<\\/link>/i);
+    const titleMatch = item.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const linkMatch = item.match(/<link[^>]*>([\s\S]*?)<\/link>/i);
     if (!linkMatch) continue;
     let parsed;
     try { parsed = validateOfficialUrl(decodeHtml(linkMatch[1].trim())); } catch { continue; }
