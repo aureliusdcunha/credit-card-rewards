@@ -28,10 +28,8 @@ export function normalizeDraftRewardUnits(data) {
     const normalized = normalizeRewardUnit(current, rewardCurrency);
     if (normalized && normalized !== current) {
       rule.unit = normalized;
-      rule.notes = appendReviewNote(
-        rule.notes,
-        \`The extracted unit "\${current}" was interpreted as the spend currency, not the reward unit. It was normalized to "\${normalized}" from rewardCurrency; verify this against the quoted issuer terms before publishing.\`
-      );
+      const note = 'The extracted unit "' + current + '" was interpreted as the spend currency, not the reward unit. It was normalized to "' + normalized + '" from rewardCurrency; verify this against the quoted issuer terms before publishing.';
+      rule.notes = appendReviewNote(rule.notes, note);
     }
   }
   return data;
