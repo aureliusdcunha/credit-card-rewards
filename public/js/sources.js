@@ -144,8 +144,8 @@
     const typedCardName = document.getElementById("discover-card-name").value.trim();
     const selectedExistingCard = cards.find(card => String(card.id) === String(cardSelect.value));
     const sameIssuer = selectedExistingCard &&
-      String(selectedExistingCard.issuer || "").trim().toLowerCase().replace(/\\s+/g, " ") ===
-      issuerInput.toLowerCase().replace(/\\s+/g, " ");
+      String(selectedExistingCard.issuer || "").trim().toLowerCase().replace(/\s+/g, " ") ===
+      String(selectedExistingCard.issuer || "").trim().toLowerCase().replace(/\s+/g, " ") ===
     const payload = {
       issuer: sameIssuer ? selectedExistingCard.issuer : issuerInput,
       cardName: sameIssuer ? selectedExistingCard.name : typedCardName,
