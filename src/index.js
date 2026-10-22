@@ -1,6 +1,7 @@
 import { getCards, getDrafts } from "./db.js";
 import { calculateRewards } from "./rules-engine.js";
 import { discoverOfficialUrls, validateOfficialUrl } from "./source-discovery.js";
+import { extractOfficialHtml } from "./html-source.js";
 import { normalizeDraftRewardUnits } from "./reward-units.js";
 import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts, normalizeSbiSimplySaveExtraction } from "./issuer-normalizers.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
@@ -65,7 +66,7 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
-async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}) {
+async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}, cardName = "", relatedDepth = 0) {
   let current = validateOfficialUrl(rawUrl);
   for (let redirectCount = 0; redirectCount <= 3; redirectCount++) {
     const timeoutOptions = {};
@@ -130,10 +131,38 @@ async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}) {
     if (declared > MAX_HTML_BYTES) throw new Error("The page is too large for this importer. Paste only the relevant reward and exclusion sections.");
     const body = await response.text();
     if (body.length > MAX_HTML_BYTES) throw new Error("The page is too large for this importer. Paste only the relevant reward and exclusion sections.");
-    const title = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
-    const extracted = normalizeText(body);
-    if (extracted.length < 100) throw new Error("Very little readable text was found on this page. Paste the terms manually.");
-    return { url: current.toString(), title: normalizeText(title || current.hostname), text: extracted.slice(0, MAX_SOURCE_CHARS) };
+    const document = extractOfficialHtml(body, current.toString(), cardName);
+    if (document.readableTextLength < 100 && relatedDepth < 1 && document.relatedUrls.length) {
+      // Modern issuer pages may render the card details client-side while linking
+      // to a server-readable official terms PDF or conditions page. Follow only
+      // a small set of allow-listed links on the same issuer domain.
+      const followups = document.relatedUrls
+        .slice()
+        .sort((a, b) => Number(b.isPdf) - Number(a.isPdf) || b.score - a.score)
+        .slice(0, 2);
+      for (const related of followups) {
+        try {
+          const nested = await fetchOfficialSource(related.url, aiBinding, providerEnv, cardName, relatedDepth + 1);
+          if (nested.text && (nested.readableTextLength ?? nested.text.length) >= 100) {
+            return { ...nested, discoveredFrom: current.toString(), parentTitle: document.title };
+          }
+        } catch (error) {
+          console.warn("Linked issuer source could not be read:", JSON.stringify({
+            from: current.hostname,
+            linkedHost: (() => { try { return new URL(related.url).hostname; } catch { return "unknown"; } })(),
+            message: String(error?.message || error).slice(0, 160)
+          }));
+        }
+      }
+    }
+    return {
+      url: current.toString(),
+      title: document.title || current.hostname,
+      text: document.text.slice(0, MAX_SOURCE_CHARS),
+      readableTextLength: document.readableTextLength,
+      relatedUrls: document.relatedUrls,
+      javascriptHeavy: document.javascriptHeavy
+    };
   }
   throw new Error("Unable to fetch the official source.");
 }
@@ -255,10 +284,22 @@ async function aiExtract(request, env) {
   let sourceTitle = intake.sourceTitle;
   if (!sourceText) {
     try {
-      const fetched = await fetchOfficialSource(intake.sourceUrl, env.AI, env);
+      const fetched = await fetchOfficialSource(intake.sourceUrl, env.AI, env, body.cardName || "");
       sourceText = fetched.text;
       sourceTitle = fetched.title;
       intake.sourceUrl = fetched.url;
+      if (!sourceText || (fetched.readableTextLength ?? sourceText.trim().length) < 100) {
+        const relatedSources = (fetched.relatedUrls || []).slice(0, 5);
+        return json({
+          error: fetched.javascriptHeavy
+            ? "The issuer page appears to load its content with JavaScript, so the server-readable text is too short to extract safely."
+            : "The official URL returned too little readable card-term text.",
+          relatedSources,
+          nextStep: relatedSources.length
+            ? "Try one of the detected official terms links below, or paste the relevant terms text. No draft was saved and no rules were published."
+            : "Use an official card-terms page or PDF, or paste the relevant source text. No draft was saved and no rules were published."
+        }, 422);
+      }
     } catch (error) { return json({ error: error.message }, 422); }
   }
   sourceText = sourceText.slice(0, MAX_SOURCE_CHARS);
@@ -466,8 +507,15 @@ async function autoExtractCardWithTrace(request, env, trace) {
   pdfCandidates.splice(isHdfcRegalia ? 3 : isSbiSimplySave ? 1 : 2);
   const readCandidate = async candidate => {
     try {
-      const fetched = await fetchOfficialSource(candidate.url, env.AI, env);
-      if (!fetched.text || fetched.text.length < 100) return { candidate, skipped: true };
+      const fetched = await fetchOfficialSource(candidate.url, env.AI, env, cardName);
+      if (!fetched.text || (fetched.readableTextLength ?? fetched.text.length) < 100) {
+        return {
+          candidate,
+          skipped: true,
+          relatedUrls: fetched.relatedUrls || [],
+          javascriptHeavy: fetched.javascriptHeavy === true
+        };
+      }
       return { candidate, fetched };
     } catch (error) {
       return { candidate, error: String(error?.message || error).slice(0, 160) };
@@ -477,6 +525,15 @@ async function autoExtractCardWithTrace(request, env, trace) {
     for (const outcome of outcomes) {
       if (outcome.error) {
         sourceErrors.push(outcome.error);
+        continue;
+      }
+      if (outcome.skipped) {
+        const links = (outcome.relatedUrls || []).slice(0, 3).map(item => item.title || item.url);
+        sourceErrors.push(
+          (outcome.candidate.title || outcome.candidate.url) +
+          (outcome.javascriptHeavy ? " appears JavaScript-rendered" : " returned little readable text") +
+          (links.length ? "; detected related issuer links: " + links.join(", ") : "")
+        );
         continue;
       }
       if (!outcome.fetched) continue;
@@ -515,11 +572,19 @@ async function autoExtractCardWithTrace(request, env, trace) {
     const details = sourceErrors.length
       ? " Details: " + sourceErrors.slice(0, 3).join(" | ")
       : " The candidates returned too little readable text.";
+    const linkedCandidates = htmlOutcomes.flatMap(outcome =>
+      (outcome.relatedUrls || []).map(item => ({ title: item.title, url: item.url, score: item.score || 0 }))
+    );
+    const allDiagnosticCandidates = [...candidates, ...linkedCandidates].filter((item, index, all) =>
+      all.findIndex(other => other.url === item.url) === index
+    );
     return json({
-      error: "Search found " + candidates.length + " allow-listed official candidate(s), but none could be read." + details + " You can also paste the official card URL in the manual source form.",
+      error: "Search found " + candidates.length + " allow-listed official candidate(s), but none yielded enough readable card terms." + details,
+      nextStep: "The issuer page may be JavaScript-rendered or may link to a separate terms document. The importer followed detected official terms links where possible. Choose one of the discovered official links below, or paste the relevant source text. No draft was saved and no rules were published.",
       discoveredCandidates: candidates.length,
+      relatedCandidateCount: linkedCandidates.length,
       sourceErrors: sourceErrors.slice(0, 3),
-      sourceCandidates: candidates.slice(0, 8).map(item => ({ title: item.title, url: item.url })),
+      sourceCandidates: allDiagnosticCandidates.slice(0, 10).map(item => ({ title: item.title, url: item.url })),
       timingMs: { ...trace.timings, totalMs: Date.now() - trace.startedAt }
     }, 422);
   }
