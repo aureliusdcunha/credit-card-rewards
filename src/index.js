@@ -435,13 +435,22 @@ async function autoExtractCardWithTrace(request, env, trace) {
   const sourceErrors = [];
   const selectedSources = [];
   const isHdfcRegalia = /hdfc/i.test(issuer) && /regalia/i.test(cardName) && /gold/i.test(cardName);
-  // Keep a compact evidence bundle for faster model extraction. Regalia has
-  // special handling because some numeric earning/lounges terms live in PDFs.
-  const maxSources = isHdfcRegalia ? 4 : 2;
+  const isSbiSimplySave = /(?:\bsbi\b|state bank of india)/i.test(issuer) && /simply\s*save/i.test(cardName);
+  // Keep compact evidence bundles except when a card's numeric earning rate and
+  // cap live in a dedicated official terms PDF (SBI SimplySAVE).
+  const maxSources = isHdfcRegalia ? 4 : isSbiSimplySave ? 3 : 2;
   const isPdfCandidate = candidate => /\.pdf(?:[?#]|$)/i.test(String(candidate.url || "")) ||
     /\bpdf\b/i.test(String(candidate.title || ""));
-  const htmlCandidates = candidates.filter(candidate => !isPdfCandidate(candidate)).slice(0, 5);
+  const htmlCandidates = candidates.filter(candidate => !isPdfCandidate(candidate)).slice(0, isSbiSimplySave ? 2 : 5);
   const pdfCandidates = candidates.filter(isPdfCandidate);
+  if (isSbiSimplySave) {
+    pdfCandidates.sort((a, b) => {
+      const weight = candidate => /simplysave.*tnc|simplysave.*terms|simplysave.*pdf/i.test(
+        String(candidate.url || "") + " " + String(candidate.title || "")
+      ) ? 0 : 1;
+      return weight(a) - weight(b) || Number(b.score || 0) - Number(a.score || 0);
+    });
+  }
   if (isHdfcRegalia) {
     // Preserve the two PDFs that contain Regalia Gold's numeric base rate and
     // general redemption/fee rules before optional lounge-only documentation.
@@ -454,7 +463,7 @@ async function autoExtractCardWithTrace(request, env, trace) {
     };
     pdfCandidates.sort((a, b) => hdfcPdfPriority(a) - hdfcPdfPriority(b) || Number(b.score || 0) - Number(a.score || 0));
   }
-  pdfCandidates.splice(isHdfcRegalia ? 3 : 2);
+  pdfCandidates.splice(isHdfcRegalia ? 3 : isSbiSimplySave ? 1 : 2);
   const readCandidate = async candidate => {
     try {
       const fetched = await fetchOfficialSource(candidate.url, env.AI, env);
