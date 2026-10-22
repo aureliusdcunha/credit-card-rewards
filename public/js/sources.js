@@ -268,6 +268,16 @@
 
   tokenInput.value = getToken();
   if (getToken()) setAdminStatus("Token present in this tab. Select Use token to verify it.");
-  loadCards().catch(error => { cardSelect.innerHTML = '<option value="">Card catalogue unavailable</option>'; errorBox.textContent = error.message; });
+  const sourceReviewPrefill = window.CRI_SOURCE_REVIEW_PREFILL;
+  const reviewPrefillOptions = {
+    search: window.location.search,
+    issuerInput: document.getElementById("discover-issuer"),
+    cardNameInput: document.getElementById("discover-card-name"),
+    cardSelect
+  };
+  if (sourceReviewPrefill) sourceReviewPrefill.applyQueryPrefill({ ...reviewPrefillOptions, cards: [] });
+  loadCards().then(() => {
+    if (sourceReviewPrefill) sourceReviewPrefill.applyQueryPrefill({ ...reviewPrefillOptions, cards });
+  }).catch(error => { cardSelect.innerHTML = '<option value="">Card catalogue unavailable</option>'; errorBox.textContent = error.message; });
   refreshDrafts();
 })();
