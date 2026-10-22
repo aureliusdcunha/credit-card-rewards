@@ -1035,3 +1035,9 @@ textarea::selection,
   background: rgba(85, 214, 179, .44) !important;
   color: #ffffff !important;
 }
+
+
+/* Hide the catalogue warning when runtime state says there is nothing to warn about. */
+.catalogue-data-warning[hidden] { display: none !important; }
+.catalogue-data-warning { margin-top: 16px; }
+.catalogue-data-warning.notice-neutral { background: #17242f; border-color: #2d414f; }
