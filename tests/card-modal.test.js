@@ -190,13 +190,19 @@ test("Restrictions tab shows condition-bearing benefits for any issuer, not only
 
 test("card detail tabs reserve enough height and cannot shrink behind the content panel", async () => {
   const css = await readFile(new URL("../public/css/app.css", import.meta.url), "utf8");
-  const tabContainerRule = css.match(/\.card-modal-tabs\s*\{([^}]*)\}/g)?.at(-1) || "";
-  const tabButtonRule = css.match(/\.card-modal-tabs\s+\[role=["']tab["']\]\s*\{([^}]*)\}/g)?.at(-1) || "";
+  const tabContainerRules = [...css.matchAll(/\.card-modal-tabs\s*\{([^}]*)\}/g)].map(match => match[1]);
+  const tabButtonRules = [...css.matchAll(/\.card-modal-tabs\s+\[role=["']tab["']\]\s*\{([^}]*)\}/g)].map(match => match[1]);
   const headerRule = css.match(/\.card-modal-header\s*,\s*\.card-modal-footer\s*\{([^}]*)\}/)?.[1] || "";
+  const baseTabStrip = tabContainerRules.find(rule =>
+    /flex:\s*0\s+0\s+auto/.test(rule) && /min-height:\s*54px/.test(rule)
+  );
+  const mobileTabStrip = tabContainerRules.find(rule => /min-height:\s*52px/.test(rule));
+  const tabButtonRule = tabButtonRules.find(rule =>
+    /align-items:\s*center/.test(rule) && /min-height:\s*42px/.test(rule)
+  );
 
-  assert.match(tabContainerRule, /flex:\s*0\s+0\s+auto/);
-  assert.match(tabContainerRule, /min-height:\s*54px/);
-  assert.match(tabButtonRule, /align-items:\s*center/);
-  assert.match(tabButtonRule, /min-height:\s*42px/);
+  assert.ok(baseTabStrip, "base tab strip must not shrink and must reserve a minimum height");
+  assert.ok(mobileTabStrip, "mobile tab strip must also reserve a minimum height");
+  assert.ok(tabButtonRule, "tab labels must be vertically centered with a minimum target height");
   assert.match(headerRule, /flex:\s*0\s+0\s+auto/);
 });
