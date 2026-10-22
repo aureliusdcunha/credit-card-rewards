@@ -208,6 +208,24 @@ function officialClauses(sections) {
 }
 
 
+function combinedMembershipFeeFact(sections) {
+  const pattern = /\\bjoining\\s*\\/\\s*(?:renewal|annual)\\s+(?:membership\\s+)?fee\\s*(?:(?:is|of)\\s*)?(?:[:\\-]\\s*)?(?:₹\\s*|Rs\\.?\\s*|INR\\s*)([\\d,]+(?:\\.\\d+)?)(?:\\s*(?:\\+|plus)\\s*(?:applicable\\s*)?tax(?:es)?)?/i;
+  for (const section of sections) {
+    const match = pattern.exec(String(section.text || ""));
+    if (!match) continue;
+    const amount = Number(match[1].replace(/,/g, ""));
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    return {
+      amount,
+      explicitZero: amount === 0,
+      quote: quoteForMatch(section.text, match),
+      url: section.url || null,
+      title: section.title || null
+    };
+  }
+  return null;
+}
+
 function explicitFeeFact(clauses, feeKind) {
   const isJoining = feeKind === "joining";
   const label = isJoining ? /\bjoining fee\b/i : /\b(?:annual|renewal|membership) fee\b/i;
@@ -360,8 +378,19 @@ export function normalizeCommonCardFacts(data, context = {}) {
   }
 
   const clauses = officialClauses(sections);
-  const joiningFact = explicitFeeFact(clauses, "joining");
-  const annualFact = explicitFeeFact(clauses, "annual");
+  const combinedMembershipFact = combinedMembershipFeeFact(sections);
+  const parsedJoiningFact = explicitFeeFact(clauses, "joining");
+  const parsedAnnualFact = explicitFeeFact(clauses, "annual");
+  // HDFC Regalia Gold and some other issuer pages state a single
+  // "Joining/Renewal Membership Fee of Rs. 2500 + Applicable Taxes" line.
+  // That one explicit statement applies to both the joining fee and renewal fee.
+  // Prefer this official combined fact over an AI-produced null or zero.
+  const joiningFact = combinedMembershipFact
+    ? { ...combinedMembershipFact, label: "Joining fee" }
+    : parsedJoiningFact;
+  const annualFact = combinedMembershipFact
+    ? { ...combinedMembershipFact, label: "Annual/renewal fee" }
+    : parsedAnnualFact;
   const waiverFact = findWaiverFact(clauses);
 
   if (joiningFact) data.joiningFee = joiningFact.amount;
