@@ -113,7 +113,7 @@ test("Fees tab distinguishes unknown fees from zero fees and includes fee-waiver
     officialUrl: "https://issuer.example/fees",
     benefits: [{
       name: "Joining and renewal fee",
-  assert.match(html, /₹2,500 \+ applicable taxes/);
+  assert.ok(html.includes("₹2,500 + applicable taxes"));
       conditions: "Renewal fee waived when eligible spend reaches ₹4 lakh within the preceding 12 billing cycles.",
       sourceQuote: "Joining Fee: ₹2500 plus Applicable Taxes. Renewal Fee: ₹2500 plus Applicable Taxes.",
       sourceUrl: "https://issuer.example/offer"
