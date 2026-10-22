@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
+import { discoverOfficialUrls } from "../src/source-discovery.js";
 
 test("auto discovery finds an official issuer source and saves an unverified draft", async () => {
   const originalFetch = globalThis.fetch;
-  const sourceUrl = "https://www.axisbank.com/credit-card/horizon-reward-terms";
+  const sourceUrl = "https://www.axis.bank.in/cards/credit-card/axis-horizon-credit-card";
   const searchHtml = '<a class="result__a" href="' + sourceUrl + '">Axis Horizon Credit Card reward terms and conditions</a>';
   const sourceHtml = "<html><head><title>Axis Horizon Reward Terms</title></head><body>" +
     "<h1>Horizon credit card rewards terms</h1>" +
@@ -16,7 +17,7 @@ test("auto discovery finds an official issuer source and saves an unverified dra
     if (url.hostname === "html.duckduckgo.com") {
       return new Response(searchHtml, { status: 200, headers: { "content-type": "text/html" } });
     }
-    if (url.hostname === "www.axisbank.com") {
+    if (url.hostname === "www.axis.bank.in") {
       return new Response(sourceHtml, { status: 200, headers: { "content-type": "text/html" } });
     }
     throw new Error("Unexpected outbound test URL: " + url.hostname);
@@ -57,6 +58,28 @@ test("auto discovery finds an official issuer source and saves an unverified dra
     assert.equal(body.extracted.issuer, "Axis Bank");
     assert.equal(body.extracted.cardName, "Horizon Credit Card");
     assert.match(body.warning, /draft/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("falls back to a known official Axis Horizon page when search providers return no parseable results", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async raw => {
+    const url = new URL(typeof raw === "string" ? raw : raw.url || raw.toString());
+    if (url.hostname === "html.duckduckgo.com" || url.hostname === "www.bing.com") {
+      return new Response("<html><body>No parseable results</body></html>", {
+        status: 200,
+        headers: { "content-type": url.hostname === "www.bing.com" ? "application/rss+xml" : "text/html" }
+      });
+    }
+    throw new Error("Unexpected outbound test URL: " + url.hostname);
+  };
+  try {
+    const results = await discoverOfficialUrls("Axis Bank", "Horizon Credit Card");
+    assert.equal(results[0].url, "https://www.axis.bank.in/cards/credit-card/axis-horizon-credit-card");
+    assert.ok(results.some(item => item.url.includes("terms-and-conditions-for-horizon-credit-card.pdf")));
   } finally {
     globalThis.fetch = originalFetch;
   }
