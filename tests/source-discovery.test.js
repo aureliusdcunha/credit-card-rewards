@@ -259,3 +259,22 @@ test("finds official SimplySAVE source even when search engines and SBI Card sit
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("validates an optional supplied URL against the selected card issuer", async () => {
+  const { validateIssuerOfficialUrl } = await import("../src/source-discovery.js");
+  const url = validateIssuerOfficialUrl(
+    "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card",
+    "Yes Bank",
+    "Uni"
+  );
+  assert.equal(url.hostname, "www.yes.bank.in");
+  assert.throws(
+    () => validateIssuerOfficialUrl("https://www.axis.bank.in/cards/credit-card/axis-horizon-credit-card", "Yes Bank", "Uni"),
+    /domain does not match Yes Bank/
+  );
+  assert.throws(
+    () => validateIssuerOfficialUrl("http://www.yes.bank.in/credit-cards/uni", "Yes Bank", "Uni"),
+    /Only HTTPS/
+  );
+});

@@ -325,7 +325,7 @@ async function fetchIssuerDiscoveryPage(rawUrl) {
     const response = await fetch(rawUrl, {
       headers: {
         "accept": "text/html,application/xhtml+xml,application/xml,text/xml,text/plain;q=0.9,*/*;q=0.8",
-        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.3)"
+        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.4)"
       },
       redirect: "follow",
       ...discoveryTimeoutOptions()
@@ -554,6 +554,31 @@ function legacyIssuerDomainFor(issuer, primaryDomain) {
   return match && match.domain !== primaryDomain ? match.domain : null;
 }
 
+export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
+  const url = validateOfficialUrl(raw);
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  const primaryDomain = issuerDomainFor(issuer, cardName);
+  const legacyDomain = primaryDomain ? legacyIssuerDomainFor(issuer, primaryDomain) : null;
+  const expectedDomains = [primaryDomain, legacyDomain].filter(Boolean);
+  const belongsTo = domain => host === domain || host.endsWith("." + domain);
+
+  if (expectedDomains.length) {
+    if (expectedDomains.some(belongsTo)) return url;
+    throw new Error("This URL is allow-listed, but its domain does not match " + String(issuer || "the selected issuer") + ". Use a product or terms URL on the issuer's official domain.");
+  }
+
+  // For issuers without a domain-map entry, accept a reserved .bank.in host
+  // only when the hostname itself identifies the requested issuer. Do not trust
+  // a matching name in the URL path, which can be supplied by an unrelated host.
+  const issuerTokens = String(issuer || "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter(token => token.length > 2 && !["bank", "india", "limited", "ltd", "private", "pvt", "finance", "small"].includes(token));
+  if ((host === "bank.in" || host.endsWith(".bank.in")) && issuerTokens.some(token => host.includes(token))) return url;
+
+  throw new Error("Could not verify that this allow-listed URL belongs to " + String(issuer || "the selected issuer") + ". Use a URL on the issuer's official domain.");
+}
+
 export async function discoverOfficialUrls(issuer, cardName) {
   const issuerValue = String(issuer || "").trim().slice(0, 100);
   const cardValue = String(cardName || "").trim().slice(0, 140);
@@ -623,7 +648,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const primaryResults = await Promise.all(queries.map(item =>
     readSearchResults(
       "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(item.query),
-      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.3" },
+      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.4" },
       parseDuckDuckGoResults,
       item.expectedDomain
     )
@@ -640,14 +665,14 @@ export async function discoverOfficialUrls(issuer, cardName) {
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(item.query),
-        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.3)" },
+        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.4)" },
         parser: parseDuckDuckGoLiteResults
       })),
       ...fallbackQueries.map(item => ({
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(item.query),
-        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.3)" },
+        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.4)" },
         parser: parseBingRssResults
       }))
     ];

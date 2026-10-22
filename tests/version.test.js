@@ -90,3 +90,14 @@ test("package version, every page cache-buster, all page footers and the visible
   assert.ok(layout.includes('const APP_VERSION = "' + APP_VERSION + '";'));
   assert.ok(layout.includes('const APP_BUILD = "' + APP_BUILD + '";'));
 });
+
+
+test("Source Review accepts an optional issuer-matched official URL in automatic discovery", async () => {
+  const html = await readFile(new URL("../public/sources.html", import.meta.url), "utf8");
+  const sourceScript = await readFile(new URL("../public/js/sources.js", import.meta.url), "utf8");
+  assert.match(html, /id="discover-source-url"[^>]*type="url"|type="url"[^>]*id="discover-source-url"/);
+  assert.match(html, /Official card or terms URL/);
+  assert.ok(!/id="discover-source-url"[^>]*required/.test(html), "the URL must remain optional");
+  assert.ok(sourceScript.includes('document.getElementById("discover-source-url")?.value.trim()'));
+  assert.ok(sourceScript.includes("sourceUrl:"));
+});

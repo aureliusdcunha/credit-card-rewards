@@ -1,6 +1,6 @@
 import { getCards, getDrafts } from "./db.js";
 import { calculateRewards } from "./rules-engine.js";
-import { discoverOfficialUrls, validateOfficialUrl } from "./source-discovery.js";
+import { discoverOfficialUrls, validateOfficialUrl, validateIssuerOfficialUrl } from "./source-discovery.js";
 import { extractOfficialHtml } from "./html-source.js";
 import { normalizeDraftRewardUnits } from "./reward-units.js";
 import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts, normalizeSbiSimplySaveExtraction } from "./issuer-normalizers.js";
@@ -462,13 +462,35 @@ async function autoExtractCardWithTrace(request, env, trace) {
   }
 
   let candidates;
-  trace.stage = "official source discovery";
+  const suppliedSourceUrl = String(body.sourceUrl || body.officialUrl || "").trim();
+  trace.stage = suppliedSourceUrl ? "validate supplied official source" : "official source discovery";
   const discoveryStartedAt = Date.now();
-  try { candidates = await discoverOfficialUrls(issuer, cardName); }
-  catch (error) {
-    trace.timings.discoveryMs = Date.now() - discoveryStartedAt;
-    trace.timings.totalMs = Date.now() - trace.startedAt;
-    return json({ error: error.message || "Could not discover official issuer sources.", timingMs: trace.timings }, 422);
+  if (suppliedSourceUrl) {
+    let checkedSource;
+    try {
+      checkedSource = validateIssuerOfficialUrl(suppliedSourceUrl, issuer, cardName);
+    } catch (error) {
+      trace.timings.discoveryMs = Date.now() - discoveryStartedAt;
+      trace.timings.totalMs = Date.now() - trace.startedAt;
+      return json({
+        error: error.message || "The supplied URL is not a recognised official source for this issuer.",
+        nextStep: "Use the issuer's official HTTPS card or terms URL. The URL must match the selected issuer."
+      }, 400);
+    }
+    candidates = [{
+      url: checkedSource.toString(),
+      title: "User-supplied official card source",
+      domain: checkedSource.hostname,
+      score: 1000,
+      supplied: true
+    }];
+  } else {
+    try { candidates = await discoverOfficialUrls(issuer, cardName); }
+    catch (error) {
+      trace.timings.discoveryMs = Date.now() - discoveryStartedAt;
+      trace.timings.totalMs = Date.now() - trace.startedAt;
+      return json({ error: error.message || "Could not discover official issuer sources.", timingMs: trace.timings }, 422);
+    }
   }
   trace.timings.discoveryMs = Date.now() - discoveryStartedAt;
 
@@ -578,10 +600,14 @@ async function autoExtractCardWithTrace(request, env, trace) {
     const allDiagnosticCandidates = [...candidates, ...linkedCandidates].filter((item, index, all) =>
       all.findIndex(other => other.url === item.url) === index
     );
+    const sourceFailure = suppliedSourceUrl
+      ? "The supplied official URL was fetched, but no readable card terms could be extracted."
+      : "Search found " + candidates.length + " allow-listed official candidate(s), but none yielded enough readable card terms.";
     return json({
-      error: "Search found " + candidates.length + " allow-listed official candidate(s), but none yielded enough readable card terms." + details,
-      nextStep: "The issuer page may be JavaScript-rendered or may link to a separate terms document. The importer followed detected official terms links where possible. Choose one of the discovered official links below, or paste the relevant source text. No draft was saved and no rules were published.",
+      error: sourceFailure + details,
+      nextStep: "The card page may render content with JavaScript or link to separate terms documents. The importer follows detected official issuer links where possible. You can try an official terms/PDF URL directly in the optional URL field, or paste the relevant source text. No draft was saved and no rules were published.",
       discoveredCandidates: candidates.length,
+      suppliedSourceUrl: Boolean(suppliedSourceUrl),
       relatedCandidateCount: linkedCandidates.length,
       sourceErrors: sourceErrors.slice(0, 3),
       sourceCandidates: allDiagnosticCandidates.slice(0, 10).map(item => ({ title: item.title, url: item.url })),
@@ -639,6 +665,7 @@ async function autoExtractCardWithTrace(request, env, trace) {
       issuer,
       requestedCardName: cardName,
       candidatesFound: candidates.length,
+      suppliedSourceUrl: Boolean(suppliedSourceUrl),
       selectedSource: selectedSource.url,
       sourceTitle: combinedSourceTitle,
       sourcesRead: selectedSources.map(source => ({ title: source.title, url: source.url })),
