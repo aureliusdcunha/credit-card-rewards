@@ -189,7 +189,7 @@ test("auto extraction models Sapphiro's published numeric rates instead of an un
     let capturedPrompt = "";
     const env = {
       ADMIN_TOKEN: "test-admin-token",
-      AI: { run: async request => {
+      AI: { run: async (_model, request) => {
         capturedPrompt = request.messages?.[1]?.content || "";
         return { response: JSON.stringify(extracted) };
       } }
