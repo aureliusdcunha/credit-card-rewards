@@ -228,3 +228,34 @@ test("automatic extraction fetches multiple HTML candidates concurrently", async
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("routes SBI credit-card discovery to SBI Card rather than the bank website", () => {
+  assert.equal(issuerDomainFor("SBI"), "sbi.bank.in");
+  assert.equal(issuerDomainFor("SBI", "SimplySAVE"), "sbicard.com");
+  assert.equal(issuerDomainFor("State Bank of India", "SimplySAVE SBI Card"), "sbicard.com");
+  assert.equal(validateOfficialUrl("https://www.sbicard.com/en/personal/credit-cards/simplysave-sbi-card.html").hostname, "www.sbicard.com");
+});
+
+test("finds official SimplySAVE source even when search engines and SBI Card sitemap are unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  const queries = [];
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    if (url.hostname === "html.duckduckgo.com" || url.hostname === "lite.duckduckgo.com" || url.hostname === "www.bing.com") {
+      queries.push(url.searchParams.get("q") || "");
+      return new Response("Search unavailable", { status: 503 });
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const results = await discoverOfficialUrls("sbi", "simplysave");
+    assert.ok(queries.length > 0);
+    assert.ok(queries.some(query => query.includes("site:sbicard.com")));
+    assert.equal(results[0].url, "https://www.sbicard.com/en/personal/credit-cards/simplysave-sbi-card.html");
+    assert.ok(results.some(item => item.url === "https://www.sbicard.com/en/most-important-terms-and-conditions.page"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
