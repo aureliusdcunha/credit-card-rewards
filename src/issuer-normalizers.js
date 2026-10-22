@@ -233,6 +233,21 @@ function explicitFeeFact(clauses, feeKind) {
   return null;
 }
 
+function combinedJoiningRenewalFeeFact(clauses) {
+  // HDFC's current Regalia Gold product copy commonly describes one fee
+  // amount as "Joining / Renewal Membership Fee of Rs. 2,500 + Applicable Taxes".
+  // It explicitly applies the amount to both the joining and renewal fee.
+  const combinedPattern = /\bjoining\s*\/\s*(?:renewal\s+)?(?:annual\s+)?(?:membership\s+)?fee\s*(?:(?:is|of)\s*)?(?:[:\-]\s*)?(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)/i;
+  for (const clause of clauses) {
+    const match = combinedPattern.exec(String(clause.quote || ""));
+    if (!match) continue;
+    const amount = Number(match[1].replace(/,/g, ""));
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    return { ...clause, amount, explicitZero: amount === 0, combinedJoiningRenewal: true };
+  }
+  return null;
+}
+
 function findWaiverFact(clauses) {
   const candidates = clauses.filter(clause => {
     const quote = clause.quote;
@@ -360,8 +375,9 @@ export function normalizeCommonCardFacts(data, context = {}) {
   }
 
   const clauses = officialClauses(sections);
-  const joiningFact = explicitFeeFact(clauses, "joining");
-  const annualFact = explicitFeeFact(clauses, "annual");
+  const combinedFeeFact = combinedJoiningRenewalFeeFact(clauses);
+  const joiningFact = explicitFeeFact(clauses, "joining") || combinedFeeFact;
+  const annualFact = explicitFeeFact(clauses, "annual") || combinedFeeFact;
   const waiverFact = findWaiverFact(clauses);
 
   if (joiningFact) data.joiningFee = joiningFact.amount;
