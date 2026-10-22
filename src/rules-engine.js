@@ -97,10 +97,6 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
     const futureRules = dateScopedRules.filter(rule => rule.validFrom && rule.validFrom > date);
     const expiredRules = dateScopedRules.filter(rule => rule.validTo && rule.validTo < date);
     if (eligibleRules.length === 0 && dateScopedRules.length > 0 && (futureRules.length || expiredRules.length)) {
-      const dates = [
-        ...futureRules.map(rule => String(rule.validFrom)).filter(Boolean),
-        ...expiredRules.map(rule => String(rule.validTo)).filter(Boolean)
-      ].sort();
       const firstFuture = futureRules.map(rule => String(rule.validFrom)).filter(Boolean).sort()[0] || null;
       const lastExpired = expiredRules.map(rule => String(rule.validTo)).filter(Boolean).sort().slice(-1)[0] || null;
       const explanation = firstFuture && firstFuture > date
