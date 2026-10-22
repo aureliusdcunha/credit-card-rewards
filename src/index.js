@@ -302,6 +302,28 @@ async function aiExtract(request, env) {
   }
 }
 async function autoExtractCard(request, env) {
+  const trace = { id: crypto.randomUUID(), stage: "request entry" };
+  try {
+    return await autoExtractCardWithTrace(request, env, trace);
+  } catch (error) {
+    const message = String(error?.message || error || "unknown error").slice(0, 300);
+    console.error("Unhandled automatic extraction error:", JSON.stringify({
+      diagnosticId: trace.id,
+      stage: trace.stage,
+      message,
+      stack: String(error?.stack || "").slice(0, 1800)
+    }));
+    return json({
+      error: "Automatic extraction failed unexpectedly.",
+      diagnosticId: trace.id,
+      stage: trace.stage,
+      details: message
+    }, 500);
+  }
+}
+
+async function autoExtractCardWithTrace(request, env, trace) {
+  trace.stage = "admin authentication";
   const adminError = await requireAdmin(request, env);
   if (adminError) return adminError;
   if (!env.AI || typeof env.AI.run !== "function") {
@@ -318,6 +340,7 @@ async function autoExtractCard(request, env) {
   }
 
   let candidates;
+  trace.stage = "official source discovery";
   try { candidates = await discoverOfficialUrls(issuer, cardName); }
   catch (error) { return json({ error: error.message || "Could not discover official issuer sources." }, 422); }
 
@@ -330,6 +353,7 @@ async function autoExtractCard(request, env) {
   const maxSources = isHdfcRegalia ? 5 : 3;
   for (const candidate of candidates.slice(0, 10)) {
     if (selectedSources.length >= maxSources) break;
+    trace.stage = "read official source " + (selectedSources.length + 1);
     try {
       const fetched = await fetchOfficialSource(candidate.url, env.AI);
       if (!fetched.text || fetched.text.length < 100) continue;
@@ -388,10 +412,13 @@ async function autoExtractCard(request, env) {
       deduplicatePending: true
     })
   });
+  trace.stage = "run AI extraction and persist draft";
   const extractionResponse = await aiExtract(extractionRequest, env);
+  trace.stage = "read AI extraction response";
   let result;
   try { result = await extractionResponse.json(); }
   catch { return json({ error: "The extraction service returned an unreadable response." }, 502); }
+  trace.stage = "assemble extraction response";
   return json({
     ...result,
     extractionMode: "auto-discovery",
@@ -613,8 +640,15 @@ export default {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "content-type,authorization", "access-control-max-age": "86400" } });
       try { return await handleApi(request, env); }
       catch (error) {
-        console.error("Unhandled API error:", error?.message || error);
-        return json({ error: "Unexpected server error. Check Worker logs for details." }, 500);
+        const diagnosticId = crypto.randomUUID();
+        console.error("Unhandled API error:", JSON.stringify({
+          diagnosticId,
+          path: url.pathname,
+          method: request.method,
+          message: String(error?.message || error || "unknown error"),
+          stack: String(error?.stack || "").slice(0, 1800)
+        }));
+        return json({ error: "Unexpected server error. Check Worker logs for details.", diagnosticId }, 500);
       }
     }
     if (env.ASSETS) return env.ASSETS.fetch(request);

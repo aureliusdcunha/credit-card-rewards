@@ -144,7 +144,13 @@
       if (!response.persisted) reviewMessage.textContent = "This run is in demo mode, so approval cannot persist. Confirm D1 is configured.";
       await refreshDrafts();
     } catch (error) {
-      discoverError.textContent = error.message;
+      const data = error && error.data && typeof error.data === "object" ? error.data : {};
+      const diagnostics = [
+        data.stage ? "Stage: " + data.stage : "",
+        data.details ? "Details: " + data.details : "",
+        data.diagnosticId ? "Diagnostic ID: " + data.diagnosticId : ""
+      ].filter(Boolean);
+      discoverError.textContent = [error.message, ...diagnostics].join(" ");
     } finally {
       discoverButton.disabled = false;
       discoverButton.innerHTML = 'Find official sources &amp; extract details <span>→</span>';
