@@ -4,11 +4,15 @@ export function isSpendCurrencyUnit(value) {
   return CURRENCY_UNITS.test(String(value || "").trim().replace(/\s+/g, ""));
 }
 
+function isCashValueRewardCurrency(value) {
+  return /\\b(?:cashback|cash back|cash reward|statement credit|rupee value)\\b/i.test(String(value || ""));
+}
+
 export function normalizeRewardUnit(unit, rewardCurrency) {
   const current = String(unit || "").trim();
   const reward = String(rewardCurrency || "").trim();
   if (!current || !isSpendCurrencyUnit(current)) return current;
-  if (!reward || isSpendCurrencyUnit(reward)) return current;
+  if (!reward || isSpendCurrencyUnit(reward) || isCashValueRewardCurrency(reward)) return current;
   return reward;
 }
 
@@ -20,7 +24,7 @@ function appendReviewNote(existing, note) {
 export function normalizeDraftRewardUnits(data) {
   if (!data || typeof data !== "object" || !Array.isArray(data.rules)) return data;
   const rewardCurrency = String(data.rewardCurrency || "").trim();
-  if (!rewardCurrency || isSpendCurrencyUnit(rewardCurrency)) return data;
+  if (!rewardCurrency || isSpendCurrencyUnit(rewardCurrency) || isCashValueRewardCurrency(rewardCurrency)) return data;
 
   for (const rule of data.rules) {
     if (!rule || typeof rule !== "object") continue;
