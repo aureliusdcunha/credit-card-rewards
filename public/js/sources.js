@@ -3,6 +3,10 @@
   const tokenInput = document.getElementById("admin-token");
   const adminStatus = document.getElementById("admin-status");
   const sourceForm = document.getElementById("source-form");
+  const discoverForm = document.getElementById("discover-form");
+  const discoverButton = document.getElementById("discover-button");
+  const discoverError = document.getElementById("discover-error");
+  const discoverSuccess = document.getElementById("discover-success");
   const extractButton = document.getElementById("extract-button");
   const errorBox = document.getElementById("source-error");
   const successBox = document.getElementById("source-success");
@@ -92,6 +96,50 @@
     draftList.innerHTML = '<div class="empty-state"><h3>Admin token required</h3><p>Enter the token to view saved drafts.</p></div>';
   });
   document.getElementById("refresh-drafts").addEventListener("click", refreshDrafts);
+
+  discoverForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    discoverError.textContent = "";
+    discoverSuccess.textContent = "";
+    if (!getToken()) {
+      discoverError.textContent = "Enter and verify the admin token before running AI discovery.";
+      return;
+    }
+    const payload = {
+      issuer: document.getElementById("discover-issuer").value.trim(),
+      cardName: document.getElementById("discover-card-name").value.trim(),
+      cardId: cardSelect.value || null
+    };
+    if (!payload.issuer || !payload.cardName) {
+      discoverError.textContent = "Enter both the bank and exact card name.";
+      return;
+    }
+    discoverButton.disabled = true;
+    discoverButton.textContent = "Searching official sources…";
+    try {
+      const response = await C.request("/admin/auto-extract", { method: "POST", body: JSON.stringify(payload) });
+      currentDraftId = response.draftId;
+      currentSourceUrl = response.sourceUrl;
+      currentSourceTitle = response.sourceTitle;
+      currentCardId = payload.cardId || "";
+      const draft = { id: response.draftId, cardId: payload.cardId || "", sourceUrl: response.sourceUrl, sourceTitle: response.sourceTitle, sourceExcerpt: response.sourceExcerpt, extractedJson: response.extracted, status: "needs_review" };
+      openDraft(draft);
+      const discovery = response.discovery || {};
+      discoverSuccess.textContent = (response.persisted ? "Draft saved to D1. " : "Draft generated but not persisted. ") +
+        "Found " + (discovery.candidatesFound || 0) + " official-source candidate(s); selected " + (response.sourceTitle || "one readable issuer source") + ". " +
+        (response.warning || "Review before publishing.");
+      if (discovery.sourceCandidates && discovery.sourceCandidates.length) {
+        discoverSuccess.textContent += " Candidate URLs: " + discovery.sourceCandidates.map(item => item.url).join(" | ");
+      }
+      if (!response.persisted) reviewMessage.textContent = "This run is in demo mode, so approval cannot persist. Confirm D1 is configured.";
+      await refreshDrafts();
+    } catch (error) {
+      discoverError.textContent = error.message;
+    } finally {
+      discoverButton.disabled = false;
+      discoverButton.innerHTML = 'Find official sources &amp; extract details <span>→</span>';
+    }
+  });
 
   sourceForm.addEventListener("submit", async event => {
     event.preventDefault(); errorBox.textContent = ""; successBox.textContent = "";
