@@ -114,13 +114,13 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
   );
   const feeWaiverFact = findOfficialFact(
     sourceText,
-    /(?:spend|spends).{0,80}(?:₹\s*|Rs\.?\s*)?(?:(?:4,00,000|4\s*lakh)|4\\s*lakh).{0,180}(?:waiv|renewal fee|following year|next year)/i
+    /(?:spend|spends).{0,80}(?:₹\s*|Rs\.?\s*)?(?:4,00,000|4\s*lakh).{0,180}(?:waiv|renewal fee|following year|next year)/i
   ) || findOfficialFact(
     sourceText,
-    /fee waiver.{0,180}(?:₹\s*|Rs\.?\s*)?(?:(?:4,00,000|4\s*lakh)|4\\s*lakh)/i
+    /fee waiver.{0,180}(?:₹\s*|Rs\.?\s*)?(?:4,00,000|4\s*lakh)/i
   ) || findOfficialFact(
     sourceText,
-    /renewal fee.{0,180}(?:₹\s*|Rs\.?\s*)?(?:(?:4,00,000|4\s*lakh)|4\\s*lakh)/i
+    /renewal fee.{0,180}(?:₹\s*|Rs\.?\s*)?(?:4,00,000|4\s*lakh)/i
   );
 
   // Fill structured fields only when the supplied official-source bundle explicitly
@@ -128,7 +128,7 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
   if (joiningFact) data.joiningFee = 2500;
   if (annualFact) data.annualFee = 2500;
   if (feeWaiverFact) {
-    data.annualFeeWaiver = "Renewal fee waived when eligible retail spends reach ₹(?:(?:4,00,000|4\s*lakh)|4\\s*lakh) within the preceding 12 billing cycles of the anniversary year. ₹2,500 plus applicable taxes.";
+    data.annualFeeWaiver = "Renewal fee waived when eligible retail spends reach ₹4,00,000 within the preceding 12 billing cycles of the anniversary year. ₹2,500 plus applicable taxes.";
   }
 
   if (joiningFact || annualFact || feeWaiverFact) {
@@ -136,7 +136,7 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
     upsertBenefit(data, {
       name: "Joining and renewal fee",
       description: "Joining fee and annual/renewal fee are ₹2,500 each, plus applicable taxes.",
-      conditions: "Renewal fee waiver requires eligible retail spends of ₹(?:(?:4,00,000|4\s*lakh)|4\\s*lakh) within the preceding 12 billing cycles of the anniversary year.",
+      conditions: "Renewal fee waiver requires eligible retail spends of ₹4,00,000 within the preceding 12 billing cycles of the anniversary year.",
       sourceQuote: [joiningFact?.quote, annualFact?.quote, feeWaiverFact?.quote].filter(Boolean).join(" "),
       sourceUrl: primaryFact?.url || sections.find(section => /fee|charges/i.test(section.title))?.url || null
     });
