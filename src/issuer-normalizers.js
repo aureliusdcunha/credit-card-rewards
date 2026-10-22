@@ -243,8 +243,8 @@ function combinedJoiningRenewalFeeFact(clauses) {
     if (!match) continue;
     const amount = Number(match[1].replace(/,/g, ""));
     if (!Number.isFinite(amount) || amount < 0) continue;
-    const taxEvidence = /(?:joining\\s*\\/\\s*(?:renewal\\s+)?(?:annual\\s+)?(?:membership\\s+)?fee)[\\s\\S]{0,100}(?:₹\\s*|Rs\\.?\\s*|INR\\s*)[\\d,]+(?:\\.\\d+)?[\\s\\S]{0,50}(?:\\+\\s*(?:applicable\\s*)?tax(?:es)?|plus\\s+applicable\\s+tax(?:es)?)/i.test(String(clause.text || ""));
-    const taxesApplicable = /(?:plus|\\+)\\s*(?:applicable\\s*)?tax(?:es)?\\b/i.test(String(clause.quote || "")) || taxEvidence;
+    const taxEvidence = /(?:joining\s*\/\s*(?:renewal\s+)?(?:annual\s+)?(?:membership\s+)?fee)[\s\S]{0,100}(?:₹\s*|Rs\.?\s*|INR\s*)[\d,]+(?:\.\d+)?[\s\S]{0,50}(?:\+\s*(?:applicable\s*)?tax(?:es)?|plus\s+applicable\s+tax(?:es)?)/i.test(String(clause.text || ""));
+    const taxesApplicable = /(?:plus|\+)\s*(?:applicable\s*)?tax(?:es)?\b/i.test(String(clause.quote || "")) || taxEvidence;
     return { ...clause, amount, explicitZero: amount === 0, combinedJoiningRenewal: true, taxesApplicable };
   }
   return null;
