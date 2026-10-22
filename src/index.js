@@ -2,10 +2,11 @@ import { getCards, getDrafts } from "./db.js";
 import { calculateRewards } from "./rules-engine.js";
 import { discoverOfficialUrls } from "./source-discovery.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
+import { deduplicatePendingDraftRows, draftIdentity, sameCardIdentity, normalizeIdentityPartForCompare } from "./draft-dedupe.js";
 
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_SOURCE_CHARS = 45000;
-const MAX_HTML_BYTES = 300000;
+const MAX_HTML_BYTES = 1500000;
 const MAX_PDF_BYTES = 8000000;
 const OFFICIAL_DOMAINS = [
   "axisbank.com", "axis.bank.in", "hdfcbank.com", "hdfc.bank.in", "icicibank.com", "sbicard.com", "sbi.co.in",
@@ -75,7 +76,7 @@ async function fetchOfficialSource(rawUrl, aiBinding) {
     const response = await fetch(current.toString(), {
       method: "GET",
       redirect: "manual",
-      headers: { "user-agent": "CreditCardRewardsIntelligence/0.1 (issuer-terms research)", "accept": "text/html,text/plain,application/xhtml+xml,application/pdf" }
+      headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "accept": "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.8", "accept-language": "en-IN,en-US;q=0.9,en;q=0.8" }
     });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get("location");
@@ -285,10 +286,14 @@ async function autoExtractCard(request, env) {
     }
   }
   if (!selectedSource) {
+    const details = sourceErrors.length
+      ? " Details: " + sourceErrors.slice(0, 3).join(" | ")
+      : " The candidates returned too little readable text.";
     return json({
-      error: "Search ran, but none of the discovered official issuer pages could be read. Try again or use the manual official-URL fallback.",
+      error: "Search found " + candidates.length + " allow-listed official candidate(s), but none could be read." + details + " You can also paste the official card URL in the manual source form.",
       discoveredCandidates: candidates.length,
-      sourceErrors: sourceErrors.slice(0, 3)
+      sourceErrors: sourceErrors.slice(0, 3),
+      sourceCandidates: candidates.slice(0, 8).map(item => ({ title: item.title, url: item.url }))
     }, 422);
   }
 
@@ -305,7 +310,8 @@ async function autoExtractCard(request, env) {
       cardId: body.cardId || null,
       sourceUrl: selectedSource.url,
       sourceTitle: selectedSource.title,
-      sourceText: selectedSource.text
+      sourceText: selectedSource.text,
+      deduplicatePending: true
     })
   });
   const extractionResponse = await aiExtract(extractionRequest, env);
