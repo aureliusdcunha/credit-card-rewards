@@ -23,6 +23,14 @@
   let currentCardId = "";
 
   const getToken = () => sessionStorage.getItem("criAdminToken") || "";
+  function formatTimingSummary(timingMs) {
+    if (!timingMs || typeof timingMs !== "object") return "";
+    const seconds = value => Number.isFinite(Number(value)) ? (Number(value) / 1000).toFixed(1) + "s" : "n/a";
+    return " Timing: discovery " + seconds(timingMs.discoveryMs) +
+      " · source reading " + seconds(timingMs.sourceReadMs) +
+      " · AI + save " + seconds(timingMs.aiExtractionMs) +
+      " · total " + seconds(timingMs.totalMs) + ".";
+  }
   function setAdminStatus(message, isError = false) {
     adminStatus.textContent = message;
     adminStatus.style.color = isError ? "#b42318" : "#8499ac";
@@ -151,6 +159,7 @@
       if (discovery.sourceCandidates && discovery.sourceCandidates.length) {
         discoverSuccess.textContent += " Candidate URLs: " + discovery.sourceCandidates.map(item => item.url).join(" | ");
       }
+      discoverSuccess.textContent += formatTimingSummary(response.timingMs);
       if (!response.persisted) reviewMessage.textContent = "This run is in demo mode, so approval cannot persist. Confirm D1 is configured.";
       void refreshDrafts();
     } catch (error) {
@@ -158,7 +167,8 @@
       const diagnostics = [
         data.stage ? "Stage: " + data.stage : "",
         data.details ? "Details: " + data.details : "",
-        data.diagnosticId ? "Diagnostic ID: " + data.diagnosticId : ""
+        data.diagnosticId ? "Diagnostic ID: " + data.diagnosticId : "",
+        data.timingMs ? formatTimingSummary(data.timingMs).trim() : ""
       ].filter(Boolean);
       discoverError.textContent = [error.message, ...diagnostics].join(" ");
     } finally {
