@@ -158,6 +158,9 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
       explanation: "No exact-category rule or verified fallback rule is available for this card and category.",
       notes: ["No source-quoted base rate matched the fallback rules. Inspect the saved rule categories, units, validity dates and source quotes; do not treat accelerated multipliers as base rates."],
       sourceUrl: card.officialUrl || null,
+      cardReviewStatus: card.reviewStatus || "unknown",
+      selectedDate: date,
+      selectedCategory: category,
       ruleDiagnostics
     };
   }
@@ -229,7 +232,11 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
 
   const ruleDescription = fallbackKind === "retail_base"
     ? "base retail-spend fallback"
-    : chosen.category === "general" ? "base" : "category-specific";
+    : fallbackKind === "other_spend"
+      ? "other-eligible-spend fallback"
+      : fallbackKind === "domestic"
+        ? "domestic-spend fallback"
+        : fallbackKind === "general" || chosen.category === "general" ? "base" : "category-specific";
   return {
     ok: true, excluded: false, capped, cardId: card.id, cardName: card.name, amount: spend,
     eligibleAmount, points, rewardUnit: selectedUnit, valueINR: null,
