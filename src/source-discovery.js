@@ -162,6 +162,12 @@ function knownOfficialFallbacks(issuer, cardName) {
         title: "ICICI Bank iShop FAQs — accelerated reward points and booking conditions",
         domain: "www.icici.bank.in",
         score: 115
+      },
+      {
+        url: "https://www.icicibank.com/personal-banking/cards/credit-card/sapphiro-card",
+        title: "ICICI Bank Sapphiro Credit Card — legacy official page",
+        domain: "www.icicibank.com",
+        score: 105
       }
     ];
   }
