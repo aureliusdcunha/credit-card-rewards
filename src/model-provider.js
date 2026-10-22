@@ -14,7 +14,7 @@ export function getAiProvider(env = {}) {
   return { provider: "none", model: null, configured: false };
 }
 
-export async function generateWithGemini(env, { prompt, systemPrompt, maxOutputTokens = 3500, temperature = 0.1 }) {
+export async function generateWithGemini(env, { prompt, systemPrompt, maxOutputTokens = 3500, temperature = 0.1, inlineData = null }) {
   const apiKey = String(env.GEMINI_API_KEY || "").trim();
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
   const model = String(env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL).trim() || DEFAULT_GEMINI_MODEL;
@@ -30,7 +30,13 @@ export async function generateWithGemini(env, { prompt, systemPrompt, maxOutputT
       },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: String(systemPrompt || "Return only accurate, evidence-grounded JSON.") }] },
-        contents: [{ role: "user", parts: [{ text: String(prompt || "") }] }],
+        contents: [{
+          role: "user",
+          parts: [
+            ...(String(prompt || "") ? [{ text: String(prompt) }] : []),
+            ...(inlineData && inlineData.data ? [{ inlineData: { mimeType: String(inlineData.mimeType || "application/pdf"), data: String(inlineData.data) } }] : [])
+          ]
+        }],
         generationConfig: {
           temperature,
           maxOutputTokens,
