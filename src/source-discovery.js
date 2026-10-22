@@ -541,6 +541,13 @@ export async function discoverOfficialUrls(issuer, cardName) {
 
   const domain = issuerDomainFor(issuerValue, cardValue);
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
+  // For known SBI SimplySAVE, the product page and reward-terms PDF are a
+  // verified issuer-owned source set. Return them directly rather than spending
+  // another 10–20 seconds waiting on search/sitemap providers.
+  if (/(?:\bsbi\b|state bank of india)/i.test(issuerValue) && /simply\s*save/i.test(cardValue)) {
+    const curated = knownOfficialFallbacks(issuerValue, cardValue);
+    if (curated.length) return curated;
+  }
   const safeIssuer = issuerValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   const queries = domain
     ? [
