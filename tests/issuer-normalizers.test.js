@@ -490,7 +490,7 @@ test("parses HDFC Regalia Gold combined Joining / Renewal Membership Fee wording
     "Joining / Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
     "Get Renewal Fee waived for next renewal on spends of ₹4 Lakhs.",
     "SOURCE TEXT END"
-  ].join("\\n");
+  ].join("\n");
   const draft = {
     issuer: "HDFC Bank",
     cardName: "Regalia Gold",
@@ -533,7 +533,7 @@ test("combined joining/renewal fee parsing does not overwrite an explicit differ
     "Joining Fee: ₹1,000.",
     "Joining / Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
     "SOURCE TEXT END"
-  ].join("\\n");
+  ].join("\n");
   const draft = {
     issuer: "Example Bank",
     cardName: "Example Card",
