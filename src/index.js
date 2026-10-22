@@ -10,7 +10,7 @@ const MAX_PDF_BYTES = 8000000;
 const OFFICIAL_DOMAINS = [
   "axisbank.com", "axis.bank.in", "hdfcbank.com", "hdfc.bank.in", "icicibank.com", "sbicard.com", "sbi.co.in",
   "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
-  "hsbc.co.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
+  "hsbc.co.in", "icici.bank.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
   "federalbank.co.in", "aubank.in", "au.bank.in", "standardchartered.co.in"
 ];
 
