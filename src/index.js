@@ -619,8 +619,8 @@ async function autoExtractCardWithTrace(request, env, trace) {
     fallbackRelatedCandidates = safeRelatedCandidates;
     candidates = [...candidates, ...safeRelatedCandidates];
 
-    const candidateIsPdf = candidate => /\\.pdf(?:[?#]|$)/i.test(String(candidate.url || "")) ||
-      /\\bpdf\\b/i.test(String(candidate.title || ""));
+    const candidateIsPdf = candidate => /\.pdf(?:[?#]|$)/i.test(String(candidate.url || "")) ||
+      /\bpdf\b/i.test(String(candidate.title || ""));
     const readFallbackCandidates = async fallbackCandidates => {
       const html = fallbackCandidates.filter(candidate => !candidateIsPdf(candidate)).slice(0, 4);
       const pdf = fallbackCandidates.filter(candidateIsPdf)
