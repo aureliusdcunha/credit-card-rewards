@@ -40,10 +40,14 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
     };
   }
 
-  const categoryRules = eligibleRules.filter(rule => rule.category === category).sort((a, b) => numeric(b.priority) - numeric(a.priority));
-  const baseRules = eligibleRules.filter(rule => rule.category === "general").sort((a, b) => numeric(b.priority) - numeric(a.priority));
+  const byPriority = (a, b) => numeric(b.priority) - numeric(a.priority);
+  const categoryRules = eligibleRules.filter(rule => rule.category === category).sort(byPriority);
+  const baseRules = eligibleRules.filter(rule => rule.category === "general").sort(byPriority);
   let chosen = categoryRules[0];
-  // An unverified general-rate example must not be assumed to cover named categories.
+  let fallbackKind = null;
+
+  // Do not use a generic or geography-scoped rate for a named category unless the
+  // card was reviewed and verified. Exact category rules always take precedence.
   if (!chosen && category !== "general" && card.reviewStatus !== "verified") {
     return {
       ok: true, unavailable: true, excluded: false, cardId: card.id, cardName: card.name,
@@ -53,13 +57,47 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
       sourceUrl: card.officialUrl || null
     };
   }
-  if (!chosen) chosen = baseRules[0];
+
+  if (!chosen && baseRules.length) {
+    chosen = baseRules[0];
+    fallbackKind = "general";
+  }
+
+  // Older/manual extractions sometimes label a quoted base rate as "other". Treat it
+  // as a general fallback only when its quote explicitly describes other eligible spend,
+  // not when "other" is being used as a merchant category.
+  if (!chosen && card.reviewStatus === "verified") {
+    const otherSpendRules = eligibleRules.filter(rule =>
+      rule.category === "other" &&
+      /\b(?:all\s+)?other\s+(?:eligible\s+)?(?:retail\s+)?(?:spend|spends|purchases|transactions)\b|\b(?:all\s+eligible\s+)?retail\s+(?:spend|spends|purchases|transactions)\b/i
+        .test(String(rule.sourceQuote || "") + " " + String(rule.notes || ""))
+    ).sort(byPriority);
+    if (otherSpendRules.length) {
+      chosen = otherSpendRules[0];
+      fallbackKind = "other_spend";
+    }
+  }
+
+  // Domestic/international are spend geography, not merchant categories. This app
+  // currently has one category selector, so for a verified Indian card with no exact
+  // merchant/general rule we use its domestic base as an explicitly caveated fallback.
+  // An exact international rule (above) still wins whenever the user selects it.
+  if (!chosen && card.reviewStatus === "verified" && category !== "international") {
+    const domesticRules = eligibleRules.filter(rule => rule.category === "domestic").sort(byPriority);
+    if (domesticRules.length) {
+      chosen = domesticRules[0];
+      fallbackKind = "domestic";
+    }
+  }
+
   if (!chosen) {
     return {
       ok: true, unavailable: true, excluded: false, cardId: card.id, cardName: card.name,
       amount: spend, category, points: null, rewardUnit: card.rewardCurrency || "Rewards", valueINR: null,
-      ruleStatus: "missing", explanation: "No approved rule is available for this card and category.",
-      notes: ["Add the official reward terms through Source Review, then approve the extracted rules."], sourceUrl: card.officialUrl || null
+      ruleStatus: "missing",
+      explanation: "No exact-category rule or verified fallback rule is available for this card and category.",
+      notes: ["Add and review a general eligible-spend rate in the official issuer terms, or select a category for which the card has a verified rule."],
+      sourceUrl: card.officialUrl || null
     };
   }
 
@@ -113,6 +151,13 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   const anyDemoExclusions = eligibleExclusions.some(ex => ex.status !== "approved");
   const notes = [];
   if (capMessage) notes.push(capMessage);
+  if (fallbackKind === "other_spend") {
+    notes.push("No exact-category rule was found; a verified rule quoted for 'other eligible spend' was used as the fallback. Confirm that the issuer's wording covers this merchant category.");
+  } else if (fallbackKind === "domestic") {
+    notes.push("No exact-category or general rule was found; a verified domestic-spend rate was used as a fallback. This assumes the transaction is domestic; this page does not separately ask for transaction geography.");
+  } else if (fallbackKind === "general" && category !== "general") {
+    notes.push("No exact-category rule was found; the card's verified general eligible-spend rate was used.");
+  }
   if (ruleIsDemo || anyDemoExclusions || card.reviewStatus !== "verified") {
     notes.push("Provisional estimate: one or more rules for this card have not been fully verified. Check the linked official terms before making a payment decision.");
   }
