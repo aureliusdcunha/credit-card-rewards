@@ -429,6 +429,150 @@ export function normalizeCommonCardFacts(data, context = {}) {
   return data;
 }
 
+
+function firstOfficialMatch(sections, patterns) {
+  const candidates = [];
+  for (const section of sections) {
+    let hostname = "";
+    try { hostname = new URL(section.url).hostname.toLowerCase(); } catch {}
+    if (!hostname.endsWith("sbicard.com")) continue;
+    for (const pattern of patterns) {
+      const match = pattern.exec(section.text);
+      if (match) {
+        candidates.push({
+          sourceUrl: section.url,
+          sourceTitle: section.title,
+          sourceText: section.text,
+          quote: quoteForMatch(section.text, match),
+          index: match.index
+        });
+        break;
+      }
+    }
+  }
+  return candidates[0] || null;
+}
+
+export function normalizeSbiSimplySaveExtraction(data, context = {}) {
+  if (!data || typeof data !== "object") return data;
+  const issuer = String(context.issuer || data.issuer || "").toLowerCase();
+  const cardName = String(context.cardName || data.cardName || "").toLowerCase();
+  const isSbi = /\bsbi\b|\bstate bank of india\b/.test(issuer) ||
+    /\bsbi card\b/.test(cardName);
+  if (!isSbi || !/simply\s*save/.test(cardName)) return data;
+
+  const sections = officialSourceSections(String(context.sourceText || ""), context.sourceUrl || "");
+  const officialSections = sections.filter(section => {
+    try { return new URL(section.url).hostname.toLowerCase().endsWith("sbicard.com"); }
+    catch { return false; }
+  });
+  if (!officialSections.length) return data;
+
+  const baseFact = firstOfficialMatch(officialSections, [
+    /\bon\s+all\s+other\s+(?:eligible\s+)?(?:spends?|categories)[,:]?\s*(?:earn\s+)?1\s+reward\s+point\s+(?:per|for\s+every|on\s+every)\s*(?:₹|Rs\.?\s*|INR\s*)?150\s*(?:spent|spends?)\b/i,
+    /\b1\s+reward\s+point\s+(?:per|for\s+every|on\s+every)\s*(?:₹|Rs\.?\s*|INR\s*)?150\s*(?:spent|spends?)\s+(?:on\s+all\s+other\s+(?:eligible\s+)?(?:spends?|categories))\b/i
+  ]);
+
+  const acceleratedFact = firstOfficialMatch(officialSections, [
+    /\b10\s*(?:x|×)?\s+reward\s+points?\s+(?:per|for\s+every|on\s+every)\s*(?:₹|Rs\.?\s*|INR\s*)?150\s*(?:spent|spends?)\s+(?:on|for)\s+[^.!?;\n]{0,220}/i
+  ]);
+  const acceleratedQuote = acceleratedFact?.quote || "";
+  const hasEveryAcceleratedCategory =
+    /\bdining\b/i.test(acceleratedQuote) &&
+    /\bmovies?\b/i.test(acceleratedQuote) &&
+    /\b(?:grocer(?:y|ies))\b/i.test(acceleratedQuote) &&
+    /\bdepartmental\s+stores?\b/i.test(acceleratedQuote);
+
+  const capFact = firstOfficialMatch(officialSections, [
+    /(?:maximum\s+cap\s+of|cap\s+of)\s*5,?000\s+reward\s+points?\s*(?:\/\s*month|per\s+(?:calendar\s+)?month|monthly)/i,
+    /\b5,?000\s+reward\s+points?\s+(?:per|each)\s+(?:calendar\s+)?month\b/i
+  ]);
+
+  if (!Array.isArray(data.rules)) data.rules = [];
+  if (!Array.isArray(data.benefits)) data.benefits = [];
+  if (!Array.isArray(data.missingItems)) data.missingItems = [];
+
+  const newRules = [];
+  if (baseFact) {
+    newRules.push({
+      category: "general",
+      rate: 1,
+      perAmount: 150,
+      unit: "Reward Points",
+      minTransaction: null,
+      cap: null,
+      rounding: "down",
+      validFrom: null,
+      validTo: null,
+      sourceQuote: baseFact.quote,
+      sourceUrl: baseFact.sourceUrl,
+      notes: "Base earning rate for all other eligible spend. Verify applicable exclusions and current issuer terms."
+    });
+  }
+
+  if (baseFact && acceleratedFact && hasEveryAcceleratedCategory && capFact) {
+    const acceleratedCategories = ["dining", "movies", "groceries", "departmental_stores"];
+    for (const category of acceleratedCategories) {
+      newRules.push({
+        category,
+        rate: 10,
+        perAmount: 150,
+        unit: "Reward Points",
+        minTransaction: null,
+        cap: {
+          type: "points",
+          value: 5000,
+          period: "calendar_month",
+          overCapCategory: "general"
+        },
+        rounding: "down",
+        validFrom: null,
+        validTo: null,
+        sourceQuote: acceleratedFact.quote,
+        sourceUrl: acceleratedFact.sourceUrl,
+        notes: "10 Reward Points per ₹150 on the issuer-listed accelerated category. The ₹5,000 monthly accelerated-points cap is cumulative across dining, movies, departmental stores and grocery; enter any prior accelerated points from all these categories. After the shared cap, the source says the base 1 Reward Point per ₹150 continues. Verify merchant/MCC eligibility."
+      });
+    }
+    genericUpsertBenefit(data, {
+      name: "Accelerated reward monthly cap",
+      description: "Cumulative maximum of 5,000 accelerated Reward Points per month across dining, movies, departmental stores and grocery.",
+      conditions: "Once the shared monthly accelerated-points cap is reached, the base rate of 1 Reward Point per ₹150 spent continues. The calculator needs the prior accelerated points balance to model this correctly.",
+      sourceQuote: capFact.quote,
+      sourceUrl: capFact.sourceUrl
+    });
+  } else if (acceleratedFact) {
+    genericUpsertBenefit(data, {
+      name: "10X rewards on selected everyday categories — rate needs complete verification",
+      description: "The official source describes accelerated rewards on dining, movies, departmental stores and grocery, but the supplied official source bundle did not include the full numeric cap/rate conditions needed to safely publish these as calculator rules.",
+      conditions: "Confirm the absolute points per ₹150 and the cumulative monthly cap from the current SimplySAVE card terms before using these categories in calculations.",
+      sourceQuote: acceleratedFact.quote,
+      sourceUrl: acceleratedFact.sourceUrl
+    });
+    addMissingItem(data, "The SimplySAVE accelerated-reward quote was found, but the official source bundle did not confirm both the base rate and cumulative monthly cap. Add the current SimplySAVE reward terms PDF before publishing accelerated category rules.");
+  }
+
+  if (newRules.length) {
+    const handledCategories = new Set(newRules.map(rule => rule.category));
+    data.rules = data.rules.filter(rule => {
+      const quote = String(rule?.sourceQuote || "") + " " + String(rule?.notes || "");
+      return !(handledCategories.has(rule.category) &&
+        /\b(?:reward points?|points?)\b/i.test(quote) &&
+        /\b(?:150|simply\s*save|all other spends?|10\s*[x×])\b/i.test(quote));
+    });
+    data.rules.unshift(...newRules);
+
+    // The previous AI-only pass may have reported that the numeric reward rate
+    // was absent. Remove that stale warning only after exact issuer evidence was found.
+    data.missingItems = data.missingItems.filter(item =>
+      !/reward rates?.{0,90}(?:not provided|not available|could not verify)|could not verify.{0,90}(?:reward|earning) rate/i.test(String(item))
+    );
+  } else {
+    addMissingItem(data, "Could not verify a complete SimplySAVE base earning rule from the supplied official source text. The current official product page and reward terms should be included in the source bundle before publishing.");
+  }
+
+  return data;
+}
+
 export function normalizeHdfcRegaliaExtraction(data, context = {}) {
   if (!data || typeof data !== "object") return data;
   const issuer = String(context.issuer || data.issuer || "").toLowerCase();
