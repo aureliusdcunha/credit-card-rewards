@@ -1,7 +1,7 @@
-const CURRENCY_UNITS = /^(?:₹|inr|rs\\.?|rupees?)$/i;
+const CURRENCY_UNITS = /^(?:₹|inr|rs\.?|rupees?)$/i;
 
 export function isSpendCurrencyUnit(value) {
-  return CURRENCY_UNITS.test(String(value || "").trim().replace(/\\s+/g, ""));
+  return CURRENCY_UNITS.test(String(value || "").trim().replace(/\s+/g, ""));
 }
 
 export function normalizeRewardUnit(unit, rewardCurrency) {
@@ -30,7 +30,7 @@ export function normalizeDraftRewardUnits(data) {
       rule.unit = normalized;
       rule.notes = appendReviewNote(
         rule.notes,
-        `The extracted unit "${current}" was interpreted as the spend currency, not the reward unit. It was normalized to "${normalized}" from rewardCurrency; verify this against the quoted issuer terms before publishing.`
+        \`The extracted unit "\${current}" was interpreted as the spend currency, not the reward unit. It was normalized to "\${normalized}" from rewardCurrency; verify this against the quoted issuer terms before publishing.\`
       );
     }
   }
