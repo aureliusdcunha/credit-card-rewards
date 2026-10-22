@@ -59,3 +59,94 @@ test("rounds reward points down to whole units by default", () => {
   const result = calculateRewards({ card, amount: 25000, category: "general", purchaseDate: "2026-10-21" });
   assert.equal(result.points, 666);
 });
+
+
+test("uses a verified general retail rule when comparing a named merchant category", () => {
+  const card = {
+    id: "verified-base",
+    name: "Verified Base Card",
+    issuer: "Example Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [
+      { category: "general", rate: 2, perAmount: 100, unit: "Reward Points", status: "approved", validFrom: "2026-01-01" },
+      { category: "airline_direct", rate: 5, perAmount: 100, unit: "Reward Points", status: "approved", validFrom: "2026-01-01" }
+    ],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.ok, true);
+  assert.equal(result.unavailable, undefined);
+  assert.equal(result.points, 500);
+  assert.match(result.notes.join(" "), /verified general eligible-spend rate was used/i);
+});
+
+test("uses an other-spend rule as a fallback only when the issuer quote says it covers other eligible spend", () => {
+  const card = {
+    id: "verified-other",
+    name: "Verified Other Spend Card",
+    issuer: "Example Bank",
+    rewardCurrency: "EDGE Miles",
+    reviewStatus: "verified",
+    rules: [
+      { category: "other", rate: 2, perAmount: 100, unit: "EDGE Miles", status: "approved", sourceQuote: "Earn 2 EDGE Miles per ₹100 spent on other spends." }
+    ],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.ok, true);
+  assert.equal(result.points, 500);
+  assert.match(result.notes.join(" "), /other eligible spend.*fallback/i);
+});
+
+test("uses verified domestic rate as a caveated fallback for a non-international category", () => {
+  const card = {
+    id: "verified-domestic",
+    name: "Verified Domestic Card",
+    issuer: "Example Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [
+      { category: "domestic", rate: 2, perAmount: 100, unit: "Reward Points", status: "approved", sourceQuote: "Earn 2 reward points per ₹100 on domestic spends." }
+    ],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.ok, true);
+  assert.equal(result.points, 500);
+  assert.match(result.notes.join(" "), /assumes the transaction is domestic/i);
+});
+
+test("exact category-specific rates override general fallback rates", () => {
+  const card = {
+    id: "verified-specific",
+    name: "Verified Specific Card",
+    issuer: "Example Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [
+      { category: "general", rate: 2, perAmount: 100, unit: "Reward Points", status: "approved" },
+      { category: "dining", rate: 4, perAmount: 100, unit: "Reward Points", status: "approved" }
+    ],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.points, 1000);
+  assert.equal(result.rate, 4);
+  assert.equal(result.notes.some(note => /general eligible-spend rate was used/i.test(note)), false);
+});
+
+test("verified fallback does not override a matching category exclusion", () => {
+  const card = {
+    id: "verified-excluded",
+    name: "Verified Excluded Card",
+    issuer: "Example Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [{ category: "general", rate: 2, perAmount: 100, unit: "Reward Points", status: "approved" }],
+    exclusions: [{ category: "dining", reason: "Dining transactions excluded", status: "approved" }]
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.excluded, true);
+  assert.equal(result.points, 0);
+});
