@@ -20,7 +20,7 @@
     if (data.error) return `<article class="compare-card-result"><div class="compare-rank">CARD ${index + 1}</div><h3>${C.escapeHtml(item.card.name)}</h3><p class="compare-issuer">${C.escapeHtml(item.card.issuer)}</p><div class="compare-note">${C.escapeHtml(data.error)}</div></article>`;
     if (data.unavailable) {
       const diagnostics = Array.isArray(data.ruleDiagnostics) ? data.ruleDiagnostics : [];
-      const diagnosticDetails = diagnostics.length ? `<details class="compare-diagnostics"><summary>Saved rules (${diagnostics.length})</summary><div class="compare-diagnostics-list">${diagnostics.map(rule => {
+      const diagnosticDetails = diagnostics.length ? `<details class="compare-diagnostics"><summary>Saved rules (${diagnostics.length})</summary><div class="compare-diagnostic-context">App rule context: ${C.escapeHtml(data.cardReviewStatus || "unknown card status")} · category ${C.escapeHtml(data.selectedCategory || "unknown")} · date ${C.escapeHtml(data.selectedDate || "unknown")}</div><div class="compare-diagnostics-list">${diagnostics.map(rule => {
         const rate = rule.rate == null ? "rate missing" : `${C.formatNumber(rule.rate)} ${C.escapeHtml(rule.unit || item.card.rewardCurrency || "rewards")}`;
         const basis = rule.perAmount == null ? "" : ` per ₹${C.formatNumber(rule.perAmount)}`;
         const validity = [rule.validFrom ? `from ${rule.validFrom}` : "", rule.validTo ? `to ${rule.validTo}` : ""].filter(Boolean).join(" · ");
