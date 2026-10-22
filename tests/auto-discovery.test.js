@@ -402,7 +402,7 @@ test("HDFC Regalia Gold extraction combines multiple official sources and produc
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.ok, true);
-    assert.equal(body.discovery.selectedSource, primaryUrl);
+    assert.equal(body.discovery.selectedSource, feePageUrl);
     assert.ok(body.discovery.sourcesRead.length >= 3);
     assert.ok(promptText.includes(featureUrl));
     assert.ok(promptText.includes(feePageUrl), "the official fee page must be included in extraction source text");
