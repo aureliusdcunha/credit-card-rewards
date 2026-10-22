@@ -78,10 +78,13 @@ export function normalizeHdfcRegaliaExtraction(data, context = {}) {
   const kept = [];
   let explicitBaseRule = null;
   let movedAccelerated = false;
+  const evidenceEffectiveDate = evidence && /effective\s+(?:from\s+)?(?:15(?:st|th)?\s+may\s*,?\s*2026|may\s+15,?\s*2026)/i.test(evidence.text)
+    ? "2026-05-15"
+    : null;
   for (const rule of data.rules) {
     const detail = String(rule.sourceQuote || "") + " " + String(rule.notes || "");
     const sourceQuote = String(rule.sourceQuote || "");
-    if (ACCELERATED_PATTERN.test(detail)) {
+    if (ACCELERATED_PATTERN.test(sourceQuote) || (!sourceQuote && ACCELERATED_PATTERN.test(detail))) {
       addBenefitFromRule(
         data,
         rule,
@@ -102,7 +105,7 @@ export function normalizeHdfcRegaliaExtraction(data, context = {}) {
         rate: 5,
         perAmount: 200,
         unit: "Reward Points",
-        validFrom: "2026-05-15",
+        validFrom: evidenceEffectiveDate || rule.validFrom || data.effectiveDate || null,
         validTo: null,
         sourceQuote: quoteForMatch(sourceQuote, BASE_RATE_PATTERN.exec(sourceQuote)),
         sourceUrl: rule.sourceUrl || evidence?.sourceUrl || fallbackUrl || null,
@@ -134,7 +137,7 @@ export function normalizeHdfcRegaliaExtraction(data, context = {}) {
       minTransaction: null,
       cap: null,
       rounding: "down",
-      validFrom: "2026-05-15",
+      validFrom: evidenceEffectiveDate || data.effectiveDate || null,
       validTo: null,
       sourceQuote: evidence.sourceQuote,
       sourceUrl: evidence.sourceUrl,
@@ -146,7 +149,7 @@ export function normalizeHdfcRegaliaExtraction(data, context = {}) {
       ].filter(Boolean).join(" ")
     };
     data.rules = [baseRule, ...kept.filter(rule => !(rule.category === "general" && Number(rule.rate) === 5 && Number(rule.perAmount) === 200))];
-    data.effectiveDate = data.effectiveDate || "2026-05-15";
+    data.effectiveDate = data.effectiveDate || evidenceEffectiveDate || null;
     if (movedAccelerated) {
       addMissingItem(data, "The 5X selected-merchant offer was retained as a benefit, not a generic calculator rule. Verify the absolute accelerated rate and monthly cap against current issuer terms before adding a separate rule.");
     }
