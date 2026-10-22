@@ -605,6 +605,34 @@ async function autoExtractCardWithTrace(request, env, trace) {
         relatedToSuppliedUrl: true
       }))
     );
+
+    // Card product pages are often JavaScript-only, while their parent catalogue
+    // page contains the fees and benefits in server-rendered HTML. Walk up at
+    // most three path levels on the same validated issuer host before broad search.
+    try {
+      const supplied = validateIssuerOfficialUrl(suppliedSourceUrl, issuer, cardName);
+      const segments = supplied.pathname.split("/").filter(Boolean);
+      const minimumDepth = Math.max(1, segments.length - 3);
+      for (let keep = segments.length - 1; keep >= minimumDepth; keep--) {
+        const parent = new URL(supplied.toString());
+        parent.pathname = "/" + segments.slice(0, keep).join("/") + "/";
+        parent.search = "";
+        parent.hash = "";
+        const checkedParent = validateIssuerOfficialUrl(parent.toString(), issuer, cardName);
+        if (checkedParent.toString() === supplied.toString()) continue;
+        relatedCandidates.push({
+          url: checkedParent.toString(),
+          title: "Official issuer catalogue page",
+          domain: checkedParent.hostname,
+          score: 450 - (segments.length - keep),
+          relatedToSuppliedUrl: true,
+          parentPage: true
+        });
+      }
+    } catch (error) {
+      sourceErrors.push("Could not derive an official issuer catalogue page: " + String(error?.message || error).slice(0, 160));
+    }
+
     const seenCandidates = new Set(candidates.map(candidate => candidate.url));
     const safeRelatedCandidates = relatedCandidates.filter(candidate => {
       if (!candidate.url || seenCandidates.has(candidate.url)) return false;
