@@ -60,3 +60,36 @@ test("discovers a matching card from the issuer sitemap when search providers re
     globalThis.fetch = originalFetch;
   }
 });
+
+test("recognises current .bank.in home domains for Indian bank issuers", () => {
+  assert.equal(issuerDomainFor("Kotak Mahindra Bank"), "kotak.bank.in");
+  assert.equal(issuerDomainFor("IndusInd Bank"), "indusind.bank.in");
+  assert.equal(issuerDomainFor("HSBC India"), "hsbc.bank.in");
+  assert.equal(issuerDomainFor("Standard Chartered Bank"), "sc.bank.in");
+  assert.equal(validateOfficialUrl("https://www.somebank.bank.in/cards").hostname, "www.somebank.bank.in");
+});
+
+test("discovers a card on the .bank.in namespace when the issuer has no hardcoded domain map", async () => {
+  const originalFetch = globalThis.fetch;
+  const queries = [];
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    if (url.hostname === "html.duckduckgo.com") {
+      queries.push(url.searchParams.get("q") || "");
+      return new Response(
+        '<html><a class="result__a" href="https://www.examplebank.bank.in/credit-cards/example-rewards-credit-card">Example Bank Example Rewards Credit Card</a></html>',
+        { headers: { "content-type": "text/html" } }
+      );
+    }
+    return new Response("Search unavailable", { status: 503 });
+  };
+
+  try {
+    const results = await discoverOfficialUrls("Example Bank", "Rewards Credit Card");
+    assert.equal(results[0].url, "https://www.examplebank.bank.in/credit-cards/example-rewards-credit-card");
+    assert.ok(queries.some(query => query.includes("site:bank.in")));
+    assert.ok(queries.some(query => query.includes("Example Bank")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
