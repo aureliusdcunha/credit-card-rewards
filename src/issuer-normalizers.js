@@ -294,25 +294,25 @@ function genericUpsertBenefit(data, benefit) {
  * source text; otherwise leaves unknown values unknown.
  */
 const CARD_NETWORKS = [
-  { label: "American Express", pattern: /\\b(?:american\\s+express|amex)\\b/i },
-  { label: "Diners Club", pattern: /\\bdiners?\\s+club(?:\\s+international)?\\b/i },
-  { label: "Mastercard", pattern: /\\bmaster\\s*card\\b/i },
-  { label: "Visa", pattern: /\\bvisa\\b/i },
-  { label: "RuPay", pattern: /\\brupay\\b/i }
+  { label: "American Express", pattern: /\b(?:american\s+express|amex)\b/i },
+  { label: "Diners Club", pattern: /\bdiners?\s+club(?:\s+international)?\b/i },
+  { label: "Mastercard", pattern: /\bmaster\s*card\b/i },
+  { label: "Visa", pattern: /\bvisa\b/i },
+  { label: "RuPay", pattern: /\brupay\b/i }
 ];
 
 function extractExplicitCardNetwork(sections) {
   const cues = [
-    /\\b(?:card|payment)\\s+network\\b/i,
-    /\\bnetwork\\s+(?:type|variant)\\b/i,
-    /\\b(?:available|issued|offered)\\s+(?:on|through|in)\\b/i,
-    /\\b(?:choose|select)\\s+(?:your|a)\\s+(?:card\\s+)?network\\b/i,
-    /\\b(?:visa|master\\s*card|rupay|american\\s+express|amex|diners?\\s+club)\\b.{0,30}\\bnetwork\\b/i
+    /\b(?:card|payment)\s+network\b/i,
+    /\bnetwork\s+(?:type|variant)\b/i,
+    /\b(?:available|issued|offered)\s+(?:on|through|in)\b/i,
+    /\b(?:choose|select)\s+(?:your|a)\s+(?:card\s+)?network\b/i,
+    /\b(?:visa|master\s*card|rupay|american\s+express|amex|diners?\s+club)\b.{0,30}\bnetwork\b/i
   ];
   for (const section of sections) {
     const clauses = String(section.text || "")
-      .split(/\\n+|(?<=[.!?;])\\s+/)
-      .map(value => value.replace(/\\s+/g, " ").trim())
+      .split(/\n+|(?<=[.!?;])\s+/)
+      .map(value => value.replace(/\s+/g, " ").trim())
       .filter(Boolean);
     for (const clause of clauses) {
       if (!cues.some(cue => cue.test(clause))) continue;
@@ -322,7 +322,7 @@ function extractExplicitCardNetwork(sections) {
       const unique = [...new Set(found)];
       if (!unique.length) continue;
       const variantDependent = unique.length > 1 &&
-        /\\b(?:depending on|variant|variants|choice|choose|either|or)\\b/i.test(clause);
+        /\b(?:depending on|variant|variants|choice|choose|either|or)\b/i.test(clause);
       return {
         value: unique.length === 1
           ? unique[0]
@@ -336,7 +336,7 @@ function extractExplicitCardNetwork(sections) {
 }
 
 function isUnknownCardNetwork(value) {
-  return !String(value || "").trim() || /^(?:not specified|not recorded|unknown|n\\/?a|none|null)$/i.test(String(value).trim());
+  return !String(value || "").trim() || /^(?:not specified|not recorded|unknown|n\/?a|none|null)$/i.test(String(value).trim());
 }
 
 export function normalizeCommonCardFacts(data, context = {}) {
