@@ -110,15 +110,21 @@ export function explicitPerAmountFromQuote(sourceQuote) {
   const amountPattern = "([0-9][0-9,]*(?:\\.[0-9]+)?)";
   const currencyPrefix = "(?:₹|rs\\.?|inr|rupees?)\\s*";
   const currencySuffix = "\\s*(?:₹|rs\\.?|inr|rupees?)";
-  const amountThenSpend = new RegExp(
-    "(?:per|for each|for every|on every|every)\\s*" + amountPattern +
-    "\\s+(?:(?:rupees?|inr|rs\\.?)\\s+)?(?:eligible\\s+)?(?:spend|spent|purchase value|transaction amount)\\b",
-    "i"
-  );
+  const basisLead = "(?:per|for each|for every|on every|every)";
+  const spendWords = "(?:of\\s+)?(?:eligible\\s+)?(?:retail\\s+)?(?:spend|spends|spent|purchase value|purchase amount|transaction amount|transactions?)\\b";
+
+  // Most issuers state a spend denominator with "per/every ₹100" or "per 100 INR".
+  // Also accept slash notation such as "5 points / ₹100 spent" and constructions
+  // such as "5 points for ₹100 spent". The match must have a currency marker or an
+  // explicit spend-unit phrase; a bare number is never sufficient evidence.
   const patterns = [
-    new RegExp("(?:per|for each|for every|on every|every)\\s*" + currencyPrefix + amountPattern, "i"),
-    new RegExp("(?:per|for each|for every|on every|every)\\s*" + amountPattern + currencySuffix, "i"),
-    amountThenSpend
+    new RegExp(basisLead + "\\s*" + currencyPrefix + amountPattern, "i"),
+    new RegExp(basisLead + "\\s*" + amountPattern + currencySuffix, "i"),
+    new RegExp("(?:/|÷)\\s*" + currencyPrefix + amountPattern, "i"),
+    new RegExp("(?:/|÷)\\s*" + amountPattern + currencySuffix, "i"),
+    new RegExp("(?:for|on)\\s*" + currencyPrefix + amountPattern + "\\s*" + spendWords, "i"),
+    new RegExp("(?:for|on)\\s*" + amountPattern + currencySuffix + "\\s*" + spendWords, "i"),
+    new RegExp(basisLead + "\\s*" + amountPattern + "\\s+(?:(?:rupees?|inr|rs\\.?)\\s+)?"+ spendWords, "i")
   ];
 
   for (const pattern of patterns) {
