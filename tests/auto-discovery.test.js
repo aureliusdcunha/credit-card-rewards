@@ -211,3 +211,91 @@ test("auto extraction models Sapphiro's published numeric rates instead of an un
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("ICICI Sapphiro discovery falls back to the legacy official page and accepts a large readable card page", async () => {
+  const originalFetch = globalThis.fetch;
+  const legacyUrl = "https://www.icicibank.com/personal-banking/cards/credit-card/sapphiro-card";
+  const sourceHtml = "<html><head><title>ICICI Bank Sapphiro Credit Card — Official</title></head><body>" +
+    "<h1>Sapphiro Credit Card</h1><p>Earn 2 reward points per ₹100 on eligible domestic spend.</p>" +
+    "<p>Official source text for fallback validation.</p>" + " x".repeat(180000) + "</body></html>";
+  assert.ok(sourceHtml.length > 300000, "regression fixture must exceed the old 300 KB limit");
+  globalThis.fetch = async raw => {
+    const url = new URL(typeof raw === "string" ? raw : raw.url || raw.toString());
+    if (["html.duckduckgo.com", "lite.duckduckgo.com", "www.bing.com"].includes(url.hostname)) {
+      return new Response("<html><body>No parseable results</body></html>", {
+        status: 200,
+        headers: { "content-type": url.hostname === "www.bing.com" ? "application/rss+xml" : "text/html" }
+      });
+    }
+    if (url.href.startsWith("https://www.icici.bank.in/personal-banking/cards/credit-card/sapphiro-card") ||
+        url.href.startsWith("https://www.icici.bank.in/ishop/faqs")) {
+      return new Response("Temporarily blocked", { status: 403 });
+    }
+    if (url.href === legacyUrl) {
+      return new Response(sourceHtml, { status: 200, headers: { "content-type": "text/html" } });
+    }
+    throw new Error("Unexpected outbound test URL: " + url.href);
+  };
+  try {
+    const extracted = {
+      issuer: "ICICI Bank",
+      cardName: "Sapphiro Credit Card",
+      network: null,
+      rewardCurrency: "Reward Points",
+      annualFee: 3500,
+      annualFeeWaiver: "Waived for eligible annual spend over ₹6 lakh",
+      effectiveDate: null,
+      rules: [{ category: "general", rate: 2, perAmount: 100, unit: "Reward Points", minTransaction: 0, cap: null, rounding: "down", validFrom: null, validTo: null, sourceQuote: "Earn 2 reward points per ₹100 on eligible domestic spend.", notes: null }],
+      exclusions: [],
+      benefits: [],
+      missingItems: [],
+      summary: "Regression fixture only"
+    };
+    const env = { ADMIN_TOKEN: "test-admin-token", AI: { run: async (_model, request) => ({ response: JSON.stringify(extracted) }) } };
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: { "authorization": "Bearer test-admin-token", "content-type": "application/json" },
+      body: JSON.stringify({ issuer: "ICICI Bank", cardName: "Sapphiro Credit Card" })
+    }), env);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.selectedSource, legacyUrl);
+    assert.equal(body.extracted.rules[0].perAmount, 100);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("ICICI discovery reports useful details when all official source fallbacks are blocked", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async raw => {
+    const url = new URL(typeof raw === "string" ? raw : raw.url || raw.toString());
+    if (["html.duckduckgo.com", "lite.duckduckgo.com", "www.bing.com"].includes(url.hostname)) {
+      return new Response("<html><body>No parseable results</body></html>", {
+        status: 200,
+        headers: { "content-type": url.hostname === "www.bing.com" ? "application/rss+xml" : "text/html" }
+      });
+    }
+    if (["www.icici.bank.in", "www.icicibank.com"].includes(url.hostname)) {
+      return new Response("Temporarily blocked", { status: 403 });
+    }
+    throw new Error("Unexpected outbound test URL: " + url.href);
+  };
+  try {
+    const env = { ADMIN_TOKEN: "test-admin-token", AI: { run: async () => { throw new Error("AI should not run if every source fetch fails"); } } };
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: { "authorization": "Bearer test-admin-token", "content-type": "application/json" },
+      body: JSON.stringify({ issuer: "ICICI Bank", cardName: "Sapphiro Credit Card" })
+    }), env);
+    assert.equal(response.status, 422);
+    const body = await response.json();
+    assert.match(body.error, /HTTP 403/i);
+    assert.ok(body.discoveredCandidates >= 2);
+    assert.ok(Array.isArray(body.sourceCandidates));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
