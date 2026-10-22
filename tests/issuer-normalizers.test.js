@@ -148,3 +148,69 @@ test("keeps base rule evidence and does not turn the official base quote into an
   assert.equal(draft.rules[0].perAmount, 200);
   assert.equal(draft.rules[0].category, "general");
 });
+
+
+test("extracts HDFC Regalia Gold joining/renewal fees, spend waiver and both lounge entitlements from official sources", () => {
+  const cardPage = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
+  const feePage = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card/fees-and-charges";
+  const loungePdf = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/lounge-t-and-cs-and-list-Regalia-Gold.pdf";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Regalia Gold Credit Card",
+    "URL: " + cardPage,
+    "SOURCE TEXT START",
+    "3 Lounge visits within India per calendar quarter on spends of ₹60,000 or more in the preceding calendar quarter using the HDFC Bank Regalia Gold Credit Card.",
+    "6 Complimentary Lounge Access per calendar year outside India using Priority Pass. Minimum 4 retail transactions to apply for Priority Pass.",
+    "SOURCE TEXT END",
+    "",
+    "OFFICIAL SOURCE 2",
+    "TITLE: Regalia Gold Fees and Charges",
+    "URL: " + feePage,
+    "SOURCE TEXT START",
+    "Joining Fee: ₹2500 plus Applicable Taxes.",
+    "Renewal Fee: ₹2500 plus Applicable Taxes.",
+    "Fee Waiver on annual spends of ₹4,00,000. Spend ₹4 lakh within 12 billing cycles of your anniversary year to enjoy a waiver on the renewal fee for the following year.",
+    "SOURCE TEXT END",
+    "",
+    "OFFICIAL SOURCE 3",
+    "TITLE: Domestic Airport Lounge Access Program",
+    "URL: " + loungePdf,
+    "SOURCE TEXT START",
+    "Spend condition for unlocking 3 lounge accesses per quarter; W.e.f - 01-07-2026. Customer needs to achieve spends of 60,000 in current calendar quarter to avail lounge access on credit card in next calendar quarter.",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    rewardCurrency: "Reward Points",
+    annualFee: null,
+    joiningFee: null,
+    annualFeeWaiver: null,
+    rules: [],
+    benefits: [],
+    missingItems: []
+  };
+  normalizeHdfcRegaliaExtraction(draft, { issuer: "HDFC Bank", cardName: "Regalia Gold", sourceText, sourceUrl: cardPage });
+
+  assert.equal(draft.joiningFee, 2500);
+  assert.equal(draft.annualFee, 2500);
+  assert.match(draft.annualFeeWaiver, /₹4,00,000/);
+  assert.match(draft.annualFeeWaiver, /12 billing cycles/i);
+
+  const domestic = draft.benefits.find(item => item.name === "Domestic airport lounge access");
+  assert.ok(domestic, "domestic lounge benefit should be structured");
+  assert.match(domestic.conditions, /₹60,000/i);
+  assert.match(domestic.conditions, /preceding calendar quarter/i);
+  assert.equal(domestic.validFrom, "2026-07-01");
+  assert.equal(domestic.sourceUrl, cardPage);
+
+  const international = draft.benefits.find(item => item.name === "International airport lounge access");
+  assert.ok(international, "international lounge benefit should be structured");
+  assert.match(international.description, /6 complimentary lounge visits/i);
+  assert.match(international.conditions, /4 retail transactions/i);
+
+  const fees = draft.benefits.find(item => item.name === "Joining and renewal fee");
+  assert.ok(fees, "fee benefit should be structured");
+  assert.match(fees.description, /₹2,500 each, plus applicable taxes/i);
+  assert.equal(fees.sourceUrl, feePage);
+});
