@@ -92,7 +92,7 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
         /\b(?:per|every|each)\s+(?:₹|rs\.?\s*|inr\s*)?\s*\d[\d,]*(?:\.\d+)?\b/i.test(detail) ||
         /\b\d[\d,]*(?:\.\d+)?\s*(?:₹|rs\.?|inr)\b/i.test(detail);
       const accelerated = /\b(?:accelerated|bonus|smartbuy|partner outlets?|select brands?|myntra|nykaa|reliance digital|\d\s*[x×]|multipliers?)\b/i.test(detail);
-      const categorySpecific = /\b(?:specifically for|only on|only for|on eligible|for eligible)\s+(?:dining|restaurants?|flights?|hotels?|airline|online shopping|grocery|groceries|fuel|rent|wallet|insurance|utilities|education)\b/i.test(detail);
+      const categorySpecific = /\b(?:specifically for|only on|only for|on|for|at|via|through)\s+(?:(?:all|other|eligible|domestic|international)\s+)?(?:dining|restaurants?|flights?|hotels?|airline|online shopping|grocery|groceries|fuel|rent|wallet|insurance|utilities|utility and insurance|education|domestic|international)\b/i.test(detail);
       const looksLikeGenericSpendBasis = statesRetailBasis ||
         (statesNumericSpendBasis && /\b(?:reward points?|points?|miles?)\b/i.test(detail) &&
          /\b(?:spent|spend|spends|purchases?)\b/i.test(detail) &&
