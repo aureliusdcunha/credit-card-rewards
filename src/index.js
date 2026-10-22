@@ -2,6 +2,7 @@ import { getCards, getDrafts } from "./db.js";
 import { calculateRewards } from "./rules-engine.js";
 import { discoverOfficialUrls } from "./source-discovery.js";
 import { normalizeDraftRewardUnits } from "./reward-units.js";
+import { normalizeHdfcRegaliaExtraction } from "./issuer-normalizers.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
 import { deduplicatePendingDraftRows, draftIdentity, sameCardIdentity, normalizeIdentityPartForCompare, normalizeSourceUrl } from "./draft-dedupe.js";
 import { APP_VERSION, APP_BUILD } from "./version.js";
@@ -263,6 +264,12 @@ async function aiExtract(request, env) {
       max_tokens: 3500
     });
     extracted = parseAndValidateDraft(textFromAI(modelResult));
+    extracted = normalizeHdfcRegaliaExtraction(extracted, {
+      issuer: body.issuer,
+      cardName: body.cardName,
+      sourceText,
+      sourceUrl: intake.sourceUrl
+    });
   } catch (error) {
     console.error("Workers AI extraction error:", error?.message || error);
     return json({ error: "AI extraction failed or returned invalid JSON. Try a shorter, more focused excerpt. No rules were published." }, 502);
