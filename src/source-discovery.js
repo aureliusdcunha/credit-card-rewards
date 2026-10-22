@@ -250,63 +250,69 @@ export async function discoverOfficialUrls(issuer, cardName) {
     "site:" + domain + " \"" + safeCard + "\" credit card MITC benefits reward programme"
   ];
   const combined = new Map();
-  for (const query of queries) {
-    let response;
-    try {
-      response = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
-        headers: { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.1" }
-      });
-    } catch { continue; }
-    if (!response.ok) continue;
-    const html = (await response.text()).slice(0, 1200000);
-    for (const result of parseDuckDuckGoResults(html, domain)) {
+  const mergeResults = results => {
+    for (const result of results) {
       const existing = combined.get(result.url);
       if (!existing || result.score > existing.score) combined.set(result.url, result);
     }
-  }
-  // Search-result HTML can change or be simplified by bot protection. Try DuckDuckGo's
-  // lighter results page with a looser anchor parser before using another provider.
-  if (!combined.size) {
-    for (const query of queries.slice(0, 2)) {
-      let response;
-      try {
-        response = await fetch("https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query), {
-          headers: {
-            "accept": "text/html",
-            "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.1)"
-          }
-        });
-      } catch { continue; }
-      if (!response.ok) continue;
-      const html = (await response.text()).slice(0, 1200000);
-      for (const result of parseDuckDuckGoLiteResults(html, domain)) {
-        const existing = combined.get(result.url);
-        if (!existing || result.score > existing.score) combined.set(result.url, result);
-      }
-      if (combined.size) break;
+  };
+  const timeoutOptions = () => {
+    try {
+      return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+        ? { signal: AbortSignal.timeout(6500) }
+        : {};
+    } catch {
+      return {};
     }
-  }
+  };
+  const readSearchResults = async (url, headers, parser) => {
+    try {
+      const response = await fetch(url, { headers, ...timeoutOptions() });
+      if (!response.ok) return [];
+      const body = (await response.text()).slice(0, 1200000);
+      return parser(body, domain);
+    } catch {
+      return [];
+    }
+  };
 
-  // If DuckDuckGo variants yield no allow-listed links, try Bing's RSS output.
+  // The three independent primary searches run concurrently rather than adding
+  // their network latency one after another.
+  const primaryResults = await Promise.all(queries.map(query =>
+    readSearchResults(
+      "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.1" },
+      parseDuckDuckGoResults
+    )
+  ));
+  for (const results of primaryResults) mergeResults(results);
+
+  // If the primary page format is blocked or changed, probe the lighter DDG
+  // page and Bing RSS concurrently. Every returned URL still passes the official
+  // issuer domain allow-list before it can be used.
   if (!combined.size) {
-    for (const query of queries.slice(0, 2)) {
-      let response;
-      try {
-        response = await fetch("https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query), {
-          headers: {
-            "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-            "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.1)"
-          }
-        });
-      } catch { continue; }
-      if (!response.ok) continue;
-      const xml = (await response.text()).slice(0, 1200000);
-      for (const result of parseBingRssResults(xml, domain)) {
-        const existing = combined.get(result.url);
-        if (!existing || result.score > existing.score) combined.set(result.url, result);
-      }
-      if (combined.size) break;
-    }
+    const fallbackRequests = [
+      ...queries.slice(0, 2).map(query => ({
+        url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query),
+        headers: {
+          "accept": "text/html",
+          "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.1)"
+        },
+        parser: parseDuckDuckGoLiteResults
+      })),
+      ...queries.slice(0, 2).map(query => ({
+        url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
+        headers: {
+          "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+          "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.1)"
+        },
+        parser: parseBingRssResults
+      }))
+    ];
+    const fallbackResults = await Promise.all(fallbackRequests.map(request =>
+      readSearchResults(request.url, request.headers, request.parser)
+    ));
+    for (const results of fallbackResults) mergeResults(results);
   }
 
   // Some high-traffic cards have a stable, known issuer landing page. Prefer it over

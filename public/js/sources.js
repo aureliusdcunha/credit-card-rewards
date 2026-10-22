@@ -66,13 +66,13 @@
     cards = response.cards || [];
     cardSelect.innerHTML = '<option value="">Create a new card from the extracted details</option>' + cards.map(card => `<option value="${C.escapeHtml(card.id)}">${C.escapeHtml(card.issuer)} · ${C.escapeHtml(card.name)}</option>`).join("");
   }
-  async function refreshDrafts() {
+  async function refreshDrafts(preloadedResponse = null) {
     if (!getToken()) {
       draftList.innerHTML = '<div class="empty-state"><h3>Admin token required</h3><p>Set the admin token above, then refresh to load saved drafts from D1.</p></div>';
       return;
     }
     try {
-      const response = await C.request("/admin/drafts");
+      const response = preloadedResponse || await C.request("/admin/drafts");
       const drafts = response.drafts || [];
       if (!drafts.length) {
         draftList.innerHTML = `<div class="empty-state"><h3>No saved drafts</h3><p>${C.escapeHtml(response.note || "Start by importing an official bank source above.")}</p></div>`;
@@ -93,10 +93,12 @@
     if (!value) { setAdminStatus("Paste the admin token first.", true); return; }
     sessionStorage.setItem("criAdminToken", value);
     try {
-      const health = await C.request("/health");
-      const drafts = await C.request("/admin/drafts");
+      const [health, drafts] = await Promise.all([
+        C.request("/health"),
+        C.request("/admin/drafts")
+      ]);
       setAdminStatus(`Token accepted. ${health.mode === "d1" ? "D1 is connected." : "Demo mode: drafts will not persist until D1 is configured."} ${drafts.drafts?.length || 0} saved draft(s).`);
-      await refreshDrafts();
+      await refreshDrafts(drafts);
     } catch (error) {
       setAdminStatus(error.message, true);
     }
@@ -142,7 +144,7 @@
         discoverSuccess.textContent += " Candidate URLs: " + discovery.sourceCandidates.map(item => item.url).join(" | ");
       }
       if (!response.persisted) reviewMessage.textContent = "This run is in demo mode, so approval cannot persist. Confirm D1 is configured.";
-      await refreshDrafts();
+      void refreshDrafts();
     } catch (error) {
       const data = error && error.data && typeof error.data === "object" ? error.data : {};
       const diagnostics = [
@@ -177,7 +179,7 @@
       openDraft(draft);
       successBox.textContent = `${response.persisted ? "Draft saved to D1" : "Draft generated but not persisted"}. ${response.warning || "Review before publishing."}`;
       if (!response.persisted) reviewMessage.textContent = "This run is in local demo mode, so approval cannot persist. Configure D1 before publishing rules.";
-      await refreshDrafts();
+      void refreshDrafts();
     } catch (error) { errorBox.textContent = error.message; }
     finally { extractButton.disabled = false; extractButton.innerHTML = 'Extract draft with AI <span>→</span>'; }
   });
@@ -210,8 +212,7 @@
       document.getElementById("reject-draft").disabled = true;
       button.textContent = "Published";
       button.disabled = true;
-      await loadCards();
-      await refreshDrafts();
+      await Promise.all([loadCards(), refreshDrafts()]);
     } catch (error) {
       reviewMessage.textContent = error.message;
     } finally {
