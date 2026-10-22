@@ -156,7 +156,7 @@ test("Restrictions tab surfaces lounge-related spend thresholds stored as benefi
     }]
   };
   const html = Modal.renderTab(card, "restrictions");
-  assert.match(html, /Benefit eligibility and spend thresholds/);
+  assert.match(html, /Benefit eligibility conditions/);
   assert.match(html, /Domestic airport lounge access/);
   assert.match(html, /₹60,000/);
   assert.match(html, /preceding calendar quarter/);
