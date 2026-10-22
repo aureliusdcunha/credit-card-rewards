@@ -556,7 +556,7 @@ function legacyIssuerDomainFor(issuer, primaryDomain) {
 
 export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
   const url = validateOfficialUrl(raw);
-  const host = url.hostname.toLowerCase().replace(/\\.$/, "");
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
   const primaryDomain = issuerDomainFor(issuer, cardName);
   const legacyDomain = primaryDomain ? legacyIssuerDomainFor(issuer, primaryDomain) : null;
   const expectedDomains = [primaryDomain, legacyDomain].filter(Boolean);
@@ -572,7 +572,7 @@ export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
   // a matching name in the URL path, which can be supplied by an unrelated host.
   const issuerTokens = String(issuer || "").toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
-    .split(/\\s+/)
+    .split(/\s+/)
     .filter(token => token.length > 2 && !["bank", "india", "limited", "ltd", "private", "pvt", "finance", "small"].includes(token));
   if ((host === "bank.in" || host.endsWith(".bank.in")) && issuerTokens.some(token => host.includes(token))) return url;
 
