@@ -478,3 +478,75 @@ test("does not create accelerated SimplySAVE rules if the monthly cap cannot be 
   assert.ok(draft.benefits.some(item => /accelerated.*needs complete verification/i.test(item.name)));
   assert.match(draft.missingItems.join(" "), /monthly cap/i);
 });
+
+
+test("parses HDFC Regalia Gold combined Joining / Renewal Membership Fee wording as ₹2,500 each", () => {
+  const sourceUrl = "https://www.hdfcbank.com/personal/pay/cards/credit-cards/regalia-gold-credit-card";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: HDFC Bank Regalia Gold Credit Card — fees",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Joining / Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
+    "Get Renewal Fee waived for next renewal on spends of ₹4 Lakhs.",
+    "SOURCE TEXT END"
+  ].join("\\n");
+  const draft = {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    network: null,
+    rewardCurrency: "Reward Points",
+    annualFee: null,
+    joiningFee: null,
+    annualFeeWaiver: null,
+    rules: [],
+    benefits: [],
+    exclusions: [],
+    missingItems: []
+  };
+
+  normalizeCommonCardFacts(draft, {
+    issuer: draft.issuer,
+    cardName: draft.cardName,
+    sourceText,
+    sourceUrl
+  });
+
+  assert.equal(draft.joiningFee, 2500);
+  assert.equal(draft.annualFee, 2500);
+  assert.match(draft.annualFeeWaiver, /₹4,00,000|4 Lakhs/i);
+  const feeBenefit = draft.benefits.find(item => item.name === "Joining and annual fee");
+  assert.ok(feeBenefit);
+  assert.match(feeBenefit.description, /Joining fee: ₹2,500 plus applicable taxes/i);
+  assert.match(feeBenefit.description, /Annual\/renewal fee: ₹2,500 plus applicable taxes/i);
+  assert.match(feeBenefit.sourceQuote, /Joining \/ Renewal Membership Fee of Rs\. 2500 \+ Applicable Taxes/i);
+  assert.equal(feeBenefit.sourceUrl, sourceUrl);
+});
+
+test("combined joining/renewal fee parsing does not overwrite an explicit different joining or annual fee", () => {
+  const sourceUrl = "https://issuer.example/card/fees";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Card fees",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Joining Fee: ₹1,000.",
+    "Joining / Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
+    "SOURCE TEXT END"
+  ].join("\\n");
+  const draft = {
+    issuer: "Example Bank",
+    cardName: "Example Card",
+    joiningFee: null,
+    annualFee: null,
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, { issuer: draft.issuer, cardName: draft.cardName, sourceText, sourceUrl });
+
+  assert.equal(draft.joiningFee, 1000);
+  assert.equal(draft.annualFee, 2500);
+});
