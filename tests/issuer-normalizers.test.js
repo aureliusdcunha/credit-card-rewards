@@ -505,6 +505,12 @@ test("parses HDFC Regalia Gold combined Joining / Renewal Membership Fee wording
     missingItems: []
   };
 
+  normalizeHdfcRegaliaExtraction(draft, {
+    issuer: draft.issuer,
+    cardName: draft.cardName,
+    sourceText,
+    sourceUrl
+  });
   normalizeCommonCardFacts(draft, {
     issuer: draft.issuer,
     cardName: draft.cardName,
