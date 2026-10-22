@@ -7,7 +7,7 @@ const MAX_SOURCE_CHARS = 45000;
 const MAX_HTML_BYTES = 300000;
 const MAX_PDF_BYTES = 8000000;
 const OFFICIAL_DOMAINS = [
-  "axisbank.com", "hdfcbank.com", "icicibank.com", "sbicard.com", "sbi.co.in",
+  "axisbank.com", "axis.bank.in", "hdfcbank.com", "icicibank.com", "sbicard.com", "sbi.co.in",
   "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
   "hsbc.co.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
   "federalbank.co.in", "aubank.in", "au.bank.in", "standardchartered.co.in"
