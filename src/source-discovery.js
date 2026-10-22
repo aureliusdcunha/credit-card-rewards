@@ -554,6 +554,31 @@ function legacyIssuerDomainFor(issuer, primaryDomain) {
   return match && match.domain !== primaryDomain ? match.domain : null;
 }
 
+export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
+  const url = validateOfficialUrl(raw);
+  const host = url.hostname.toLowerCase().replace(/\\.$/, "");
+  const primaryDomain = issuerDomainFor(issuer, cardName);
+  const legacyDomain = primaryDomain ? legacyIssuerDomainFor(issuer, primaryDomain) : null;
+  const expectedDomains = [primaryDomain, legacyDomain].filter(Boolean);
+  const belongsTo = domain => host === domain || host.endsWith("." + domain);
+
+  if (expectedDomains.length) {
+    if (expectedDomains.some(belongsTo)) return url;
+    throw new Error("This URL is allow-listed, but its domain does not match " + String(issuer || "the selected issuer") + ". Use a product or terms URL on the issuer's official domain.");
+  }
+
+  // For issuers without a domain-map entry, accept a reserved .bank.in host
+  // only when the hostname itself identifies the requested issuer. Do not trust
+  // a matching name in the URL path, which can be supplied by an unrelated host.
+  const issuerTokens = String(issuer || "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\\s+/)
+    .filter(token => token.length > 2 && !["bank", "india", "limited", "ltd", "private", "pvt", "finance", "small"].includes(token));
+  if ((host === "bank.in" || host.endsWith(".bank.in")) && issuerTokens.some(token => host.includes(token))) return url;
+
+  throw new Error("Could not verify that this allow-listed URL belongs to " + String(issuer || "the selected issuer") + ". Use a URL on the issuer's official domain.");
+}
+
 export async function discoverOfficialUrls(issuer, cardName) {
   const issuerValue = String(issuer || "").trim().slice(0, 100);
   const cardValue = String(cardName || "").trim().slice(0, 140);
