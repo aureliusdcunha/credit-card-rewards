@@ -135,7 +135,7 @@
       const draft = { id: response.draftId, cardId: payload.cardId || "", sourceUrl: response.sourceUrl, sourceTitle: response.sourceTitle, sourceExcerpt: response.sourceExcerpt, extractedJson: response.extracted, status: "needs_review" };
       openDraft(draft);
       const discovery = response.discovery || {};
-      discoverSuccess.textContent = (response.persisted ? "Draft saved to D1. " : "Draft generated but not persisted. ") +
+      discoverSuccess.textContent = (response.deduplicated ? "Updated the existing pending draft in D1. " : response.persisted ? "Draft saved to D1. " : "Draft generated but not persisted. ") +
         "Found " + (discovery.candidatesFound || 0) + " official-source candidate(s); selected " + (response.sourceTitle || "one readable issuer source") + ". " +
         (response.warning || "Review before publishing.");
       if (discovery.sourceCandidates && discovery.sourceCandidates.length) {

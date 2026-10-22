@@ -2,10 +2,11 @@ import { getCards, getDrafts } from "./db.js";
 import { calculateRewards } from "./rules-engine.js";
 import { discoverOfficialUrls } from "./source-discovery.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
+import { deduplicatePendingDraftRows, draftIdentity, sameCardIdentity, normalizeIdentityPartForCompare, normalizeSourceUrl } from "./draft-dedupe.js";
 
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_SOURCE_CHARS = 45000;
-const MAX_HTML_BYTES = 300000;
+const MAX_HTML_BYTES = 1500000;
 const MAX_PDF_BYTES = 8000000;
 const OFFICIAL_DOMAINS = [
   "axisbank.com", "axis.bank.in", "hdfcbank.com", "hdfc.bank.in", "icicibank.com", "sbicard.com", "sbi.co.in",
@@ -75,7 +76,7 @@ async function fetchOfficialSource(rawUrl, aiBinding) {
     const response = await fetch(current.toString(), {
       method: "GET",
       redirect: "manual",
-      headers: { "user-agent": "CreditCardRewardsIntelligence/0.1 (issuer-terms research)", "accept": "text/html,text/plain,application/xhtml+xml,application/pdf" }
+      headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "accept": "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.8", "accept-language": "en-IN,en-US;q=0.9,en;q=0.8" }
     });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get("location");
@@ -185,12 +186,41 @@ async function requireAdmin(request, env) {
 }
 async function persistDraft(env, data) {
   if (!env.DB) return { id: `local-${crypto.randomUUID()}`, persisted: false };
+  const extractedJson = JSON.stringify(data.extracted);
+  const now = new Date().toISOString();
+
+  // Repeated automatic extraction for the same issuer/card updates the latest pending
+  // draft and marks older duplicates superseded, instead of growing a queue of copies.
+  if (data.deduplicatePending) {
+    const pending = await env.DB.prepare(`SELECT id, card_id, source_url, extracted_json, created_at
+      FROM extraction_drafts WHERE status = 'needs_review' ORDER BY created_at DESC LIMIT 200`).all();
+    const incomingRow = { card_id: data.cardId || null, source_url: data.sourceUrl, extracted_json: extractedJson };
+    const incomingKey = draftIdentity(incomingRow);
+    const matches = (pending.results || []).filter(row => {
+      const key = draftIdentity(row);
+      return Boolean(incomingKey && key && key === incomingKey);
+    });
+    if (matches.length) {
+      const keeper = matches[0];
+      await env.DB.prepare(`UPDATE extraction_drafts
+        SET card_id = ?, source_url = ?, source_title = ?, source_excerpt = ?, extracted_json = ?, created_at = ?
+        WHERE id = ? AND status = 'needs_review'`)
+        .bind(data.cardId || keeper.card_id || null, data.sourceUrl, data.sourceTitle || "Official terms", data.sourceExcerpt.slice(0, 8000), extractedJson, now, keeper.id)
+        .run();
+      for (const duplicate of matches.slice(1)) {
+        await env.DB.prepare("UPDATE extraction_drafts SET status = 'superseded' WHERE id = ? AND status = 'needs_review'")
+          .bind(duplicate.id).run();
+      }
+      return { id: keeper.id, persisted: true, deduplicated: true };
+    }
+  }
+
   const id = crypto.randomUUID();
   await env.DB.prepare(`INSERT INTO extraction_drafts (id, card_id, source_url, source_title, source_excerpt, extracted_json, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'needs_review', ?)`)
-    .bind(id, data.cardId || null, data.sourceUrl, data.sourceTitle || "Official terms", data.sourceExcerpt.slice(0, 8000), JSON.stringify(data.extracted), new Date().toISOString())
+    .bind(id, data.cardId || null, data.sourceUrl, data.sourceTitle || "Official terms", data.sourceExcerpt.slice(0, 8000), extractedJson, now)
     .run();
-  return { id, persisted: true };
+  return { id, persisted: true, deduplicated: false };
 }
 async function aiExtract(request, env) {
   const adminError = await requireAdmin(request, env);
@@ -238,11 +268,12 @@ async function aiExtract(request, env) {
     sourceUrl: intake.sourceUrl,
     sourceTitle: sourceTitle || "Official bank terms",
     sourceExcerpt: sourceText,
-    extracted
+    extracted,
+    deduplicatePending: body.deduplicatePending === true
   };
   try {
     const saved = await persistDraft(env, draftData);
-    return json({ ok: true, draftId: saved.id, persisted: saved.persisted, status: "needs_review", sourceUrl: intake.sourceUrl, sourceTitle: draftData.sourceTitle, sourceExcerpt: sourceText.slice(0, 1600), extracted, aiModel: MODEL, warning: "AI extraction is a draft only. Review each source quote, rule, exclusion, effective date and cap before publishing." });
+    return json({ ok: true, draftId: saved.id, persisted: saved.persisted, deduplicated: saved.deduplicated === true, status: "needs_review", sourceUrl: intake.sourceUrl, sourceTitle: draftData.sourceTitle, sourceExcerpt: sourceText.slice(0, 1600), extracted, aiModel: MODEL, warning: "AI extraction is a draft only. Review each source quote, rule, exclusion, effective date and cap before publishing." });
   } catch (error) {
     console.error("Unable to store extraction draft:", error?.message || error);
     return json({ error: "AI extraction succeeded, but the draft could not be saved to D1. Configure the database and retry." }, 500);
@@ -285,10 +316,14 @@ async function autoExtractCard(request, env) {
     }
   }
   if (!selectedSource) {
+    const details = sourceErrors.length
+      ? " Details: " + sourceErrors.slice(0, 3).join(" | ")
+      : " The candidates returned too little readable text.";
     return json({
-      error: "Search ran, but none of the discovered official issuer pages could be read. Try again or use the manual official-URL fallback.",
+      error: "Search found " + candidates.length + " allow-listed official candidate(s), but none could be read." + details + " You can also paste the official card URL in the manual source form.",
       discoveredCandidates: candidates.length,
-      sourceErrors: sourceErrors.slice(0, 3)
+      sourceErrors: sourceErrors.slice(0, 3),
+      sourceCandidates: candidates.slice(0, 8).map(item => ({ title: item.title, url: item.url }))
     }, 422);
   }
 
@@ -305,7 +340,8 @@ async function autoExtractCard(request, env) {
       cardId: body.cardId || null,
       sourceUrl: selectedSource.url,
       sourceTitle: selectedSource.title,
-      sourceText: selectedSource.text
+      sourceText: selectedSource.text,
+      deduplicatePending: true
     })
   });
   const extractionResponse = await aiExtract(extractionRequest, env);
@@ -342,8 +378,26 @@ async function approveDraft(request, env, draftId) {
 
   const requestedCardId = String(body.cardId || draftRow.card_id || "").trim();
   let cardId = requestedCardId;
+  let reusedMatchingCard = false;
   const now = new Date().toISOString();
   const effectiveFrom = String(approved.effectiveDate || now.slice(0, 10));
+
+  // Never create a second catalogue row for the same issuer + card variant when
+  // the reviewer opens a saved draft with no card selected.
+  if (!cardId) {
+    const matchingCard = await env.DB.prepare(`SELECT id FROM cards
+      WHERE lower(trim(issuer)) = lower(trim(?))
+        AND lower(trim(name)) = lower(trim(?))
+        AND status != 'archived'
+      ORDER BY CASE WHEN review_status = 'verified' THEN 0 ELSE 1 END, updated_at DESC
+      LIMIT 1`)
+      .bind(String(approved.issuer).trim(), String(approved.cardName).trim()).first();
+    if (matchingCard?.id) {
+      cardId = matchingCard.id;
+      reusedMatchingCard = true;
+    }
+  }
+
   if (cardId) {
     const existing = await env.DB.prepare("SELECT id FROM cards WHERE id = ?").bind(cardId).first();
     if (!existing) return json({ error: "Selected card does not exist in the D1 catalogue." }, 400);
@@ -406,7 +460,32 @@ async function approveDraft(request, env, draftId) {
     .bind(String(approved.issuer).slice(0, 100), String(approved.cardName).slice(0, 140), String(approved.network || "Not specified"), String(approved.rewardCurrency || "Rewards"), approved.annualFee != null && approved.annualFee !== "" && Number.isFinite(Number(approved.annualFee)) ? Number(approved.annualFee) : null, approved.annualFeeWaiver || null, approved.summary || "", draftRow.source_url, approved.effectiveDate || null, now, cardId)
     .run();
   await env.DB.prepare("UPDATE extraction_drafts SET status = 'approved', card_id = ? WHERE id = ?").bind(cardId, draftId).run();
-  return json({ ok: true, cardId, sourceId, message: "Reviewed rules published. The previous rule set was retained as retired history." });
+
+  // Retire sibling pending drafts for this exact card/source so retries do not leave
+  // multiple Review buttons that could overwrite the same card repeatedly.
+  const remainingDrafts = await env.DB.prepare("SELECT id, card_id, source_url, extracted_json FROM extraction_drafts WHERE status = 'needs_review' AND id != ? ORDER BY created_at DESC LIMIT 200")
+    .bind(draftId).all();
+  const currentIdentity = draftIdentity(draftRow);
+  for (const other of remainingDrafts.results || []) {
+    const sameCard = sameCardIdentity(other, approved.issuer, approved.cardName);
+    const sameFallbackIdentity = Boolean(currentIdentity && draftIdentity(other) === currentIdentity);
+    const sameIssuerAndSource = normalizeSourceUrl(other.source_url) === normalizeSourceUrl(draftRow.source_url)
+      && (() => {
+        try {
+          const parsed = typeof other.extracted_json === "string" ? JSON.parse(other.extracted_json) : other.extracted_json;
+          return normalizeIdentityPartForCompare(parsed?.issuer) === normalizeIdentityPartForCompare(approved.issuer);
+        } catch { return false; }
+      })();
+    if (sameCard || sameFallbackIdentity || sameIssuerAndSource) {
+      await env.DB.prepare("UPDATE extraction_drafts SET status = 'superseded' WHERE id = ? AND status = 'needs_review'")
+        .bind(other.id).run();
+    }
+  }
+
+  const message = reusedMatchingCard
+    ? "Published reviewed rules to the existing matching card instead of creating a duplicate. The previous rule set was retained as retired history; duplicate pending drafts were superseded."
+    : "Reviewed rules published. The previous rule set was retained as retired history; duplicate pending drafts were superseded.";
+  return json({ ok: true, cardId, sourceId, reusedMatchingCard, message });
 }
 
 async function handleApi(request, env) {
