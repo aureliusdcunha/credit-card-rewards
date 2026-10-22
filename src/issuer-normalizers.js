@@ -209,7 +209,7 @@ function officialClauses(sections) {
 
 
 function combinedMembershipFeeFact(sections) {
-  const pattern = /\\bjoining\\s*\\/\\s*(?:renewal|annual)\\s+(?:membership\\s+)?fee\\s*(?:(?:is|of)\\s*)?(?:[:\\-]\\s*)?(?:₹\\s*|Rs\\.?\\s*|INR\\s*)([\\d,]+(?:\\.\\d+)?)(?:\\s*(?:\\+|plus)\\s*(?:applicable\\s*)?tax(?:es)?)?/i;
+  const pattern = /\bjoining\s*\/\s*(?:renewal|annual)\s+(?:membership\s+)?fee\s*(?:(?:is|of)\s*)?(?:[:\-]\s*)?(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)(?:\s*(?:\+|plus)\s*(?:applicable\s*)?tax(?:es)?)?/i;
   for (const section of sections) {
     const match = pattern.exec(String(section.text || ""));
     if (!match) continue;
