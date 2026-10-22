@@ -1,39 +1,43 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { APP_VERSION, APP_BUILD } from "../src/version.js";
 
 const read = path => readFile(new URL(path, import.meta.url), "utf8");
 
-test("visual refresh defines a consistent premium fintech palette and surfaces", async () => {
+test("data terminal theme applies dark financial surfaces and mint/cyan data accents", async () => {
   const css = await read("../public/css/app.css");
-  assert.match(css, /--ink:\s*#14243b/);
-  assert.match(css, /--blue:\s*#4259d7/);
-  assert.match(css, /background:\s*[\s\S]{0,100}radial-gradient\(ellipse at 8% 0%/);
-  assert.match(css, /\.credit-card-tile\s*\{[^}]*border-radius:\s*19px/s);
-  assert.match(css, /\.feature-card:hover\s*\{[^}]*translateY\(-4px\)/s);
-  assert.match(css, /\.button-primary\s*\{[^}]*linear-gradient/s);
-  assert.match(css, /\.panel,\s*\.result-panel\s*\{[^}]*box-shadow/s);
+  assert.match(css, /0\.5\.0\s+—\s+DATA TERMINAL/);
+  assert.match(css, /--canvas:\s*#0d141b/);
+  assert.match(css, /--surface:\s*#151f29/);
+  assert.match(css, /--blue:\s*#55d6b3/);
+  assert.match(css, /ui-monospace/);
+  assert.match(css, /\.terminal-table\s*\{/);
+  assert.match(css, /\.stat-card:before\s*\{/);
 });
 
-test("visual refresh keeps the card details tabs visible while the content scrolls", async () => {
-  const css = await read("../public/css/app.css");
-  assert.match(css, /\.card-modal-header,\s*\.card-modal-footer\s*\{\s*flex:\s*0\s+0\s+auto/s);
-  assert.match(css, /\.card-modal-tabs\s*\{[^}]*flex:\s*0\s+0\s+auto/s);
-  assert.match(css, /\.card-modal-tabs\s*\{[^}]*min-height:\s*58px/s);
-  assert.match(css, /\.card-modal-tabs\s+\[role=tab\]\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(css, /\.card-modal-panel\s*\{[^}]*overflow:\s*auto/s);
+test("individual card details include a facts strip and source-first earning rule table", async () => {
+  const html = await read("../public/cards.html");
+  const cardsScript = await read("../public/js/cards.js");
+  const modalScript = await read("../public/js/card-modal.js");
+  assert.ok(html.includes('id="card-modal-summary"'));
+  assert.ok(cardsScript.includes("renderCardSummary(card)"));
+  assert.ok(cardsScript.includes('cell("Payment network"'));
+  assert.ok(cardsScript.includes('cell("Annual fee"'));
+  assert.ok(modalScript.includes("terminal-table"));
+  assert.ok(modalScript.includes("Inspect source evidence"));
+  assert.ok(modalScript.includes("sourceLink(rule, card)"));
 });
 
-test("visual refresh includes dedicated mobile layout and reduced-motion support", async () => {
-  const css = await read("../public/css/app.css");
-  assert.match(css, /@media\s*\(max-width:\s*720px\)/);
-  assert.match(css, /@media\s*\(max-width:\s*390px\)/);
-  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
-  assert.match(css, /\.nav-links\.open\s*\{\s*display:\s*grid/);
-  assert.match(css, /\.card-grid\s*\{\s*grid-template-columns:\s*minmax\(0,1fr\)/);
+test("catalogue tiles expose network, fee, rule count and benefit/exclusion totals", async () => {
+  const apiScript = await read("../public/js/api.js");
+  assert.ok(apiScript.includes('class="tile-card-counts"'));
+  assert.ok(apiScript.includes(">Network</div>"));
+  assert.ok(apiScript.includes(">Annual fee</div>"));
+  assert.ok(apiScript.includes("REVIEW REQUIRED"));
 });
 
-test("all pages load the refreshed frontend assets and show the same release", async () => {
+test("all pages reference the current release and cache-busted assets", async () => {
   for (const path of [
     "../public/index.html",
     "../public/cards.html",
@@ -42,10 +46,10 @@ test("all pages load the refreshed frontend assets and show the same release", a
     "../public/sources.html"
   ]) {
     const html = await read(path);
-    assert.ok(html.includes("app.css?v=0.4.0.0"), path + " must cache-bust the refreshed stylesheet");
-    assert.ok(html.includes("v0.4.0 · build 20261022.18"), path + " must show the current release");
+    assert.ok(html.includes("app.css?v=0.5.0.0"), path + " needs the terminal stylesheet cache key");
+    assert.ok(html.includes(`v${APP_VERSION} · build ${APP_BUILD}`), path + " needs current release metadata");
   }
   const layout = await read("../public/js/layout.js");
-  assert.ok(layout.includes('const APP_VERSION = "0.4.0";'));
-  assert.ok(layout.includes('const APP_BUILD = "20261022.18";'));
+  assert.ok(layout.includes(`const APP_VERSION = "${APP_VERSION}";`));
+  assert.ok(layout.includes(`const APP_BUILD = "${APP_BUILD}";`));
 });
