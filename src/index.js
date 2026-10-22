@@ -341,7 +341,7 @@ async function aiExtract(request, env) {
   };
   try {
     const saved = await persistDraft(env, draftData);
-    return json({ ok: true, draftId: saved.id, persisted: saved.persisted, deduplicated: saved.deduplicated === true, status: "needs_review", sourceUrl: intake.sourceUrl, sourceTitle: draftData.sourceTitle, sourceExcerpt: sourceText.slice(0, 1600), extracted, aiModel, aiProvider, warning: "AI extraction is a draft only. Review each source quote, rule, exclusion, effective date and cap before publishing." });
+    return json({ ok: true, draftId: saved.id, persisted: saved.persisted, deduplicated: saved.deduplicated === true, status: "needs_review", sourceUrl: intake.sourceUrl, sourceTitle: draftData.sourceTitle, sourceExcerpt: sourceText.slice(0, 1600), extracted, aiModel, aiProvider, aiFallbackUsed: Boolean(aiProvider === "gemini" && aiModel !== configuredProvider.model), aiFallbackModelsAttempted: aiAttemptedModels || [aiModel], warning: "AI extraction is a draft only. Review each source quote, rule, exclusion, effective date and cap before publishing." });
   } catch (error) {
     console.error("Unable to store extraction draft:", error?.message || error);
     return json({ error: "AI extraction succeeded, but the draft could not be saved to D1. Configure the database and retry." }, 500);
