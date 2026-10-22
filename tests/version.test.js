@@ -50,3 +50,12 @@ test("navigation version capsule stays aligned with backend release metadata", a
   assert.ok(layout.includes(`const APP_VERSION = "${APP_VERSION}";`), "layout capsule version must match backend version");
   assert.ok(layout.includes(`const APP_BUILD = "${APP_BUILD}";`), "layout capsule build must match backend build");
 });
+
+
+test("Source Review displays stage timings returned by automatic extraction", async () => {
+  const sourceScript = await readFile(new URL("../public/js/sources.js", import.meta.url), "utf8");
+  assert.ok(sourceScript.includes("formatTimingSummary(response.timingMs)"));
+  assert.ok(sourceScript.includes("timingMs.discoveryMs"));
+  assert.ok(sourceScript.includes("timingMs.sourceReadMs"));
+  assert.ok(sourceScript.includes("timingMs.aiExtractionMs"));
+});

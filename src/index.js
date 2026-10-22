@@ -12,6 +12,7 @@ const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_SOURCE_CHARS = 45000;
 const MAX_HTML_BYTES = 1500000;
 const MAX_PDF_BYTES = 8000000;
+const MAX_AUTO_SOURCE_CHARS = 30000;
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -70,7 +71,7 @@ async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}) {
     const timeoutOptions = {};
     try {
       if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
-        timeoutOptions.signal = AbortSignal.timeout(10000);
+        timeoutOptions.signal = AbortSignal.timeout(7000);
       }
     } catch {}
     const response = await fetch(current.toString(), {
@@ -375,7 +376,7 @@ async function aiExtract(request, env) {
   }
 }
 async function autoExtractCard(request, env) {
-  const trace = { id: crypto.randomUUID(), stage: "request entry" };
+  const trace = { id: crypto.randomUUID(), stage: "request entry", startedAt: Date.now(), timings: {} };
   try {
     return await autoExtractCardWithTrace(request, env, trace);
   } catch (error) {
@@ -414,36 +415,50 @@ async function autoExtractCardWithTrace(request, env, trace) {
 
   let candidates;
   trace.stage = "official source discovery";
+  const discoveryStartedAt = Date.now();
   try { candidates = await discoverOfficialUrls(issuer, cardName); }
-  catch (error) { return json({ error: error.message || "Could not discover official issuer sources." }, 422); }
+  catch (error) {
+    trace.timings.discoveryMs = Date.now() - discoveryStartedAt;
+    trace.timings.totalMs = Date.now() - trace.startedAt;
+    return json({ error: error.message || "Could not discover official issuer sources.", timingMs: trace.timings }, 422);
+  }
+  trace.timings.discoveryMs = Date.now() - discoveryStartedAt;
 
+  const sourceReadStartedAt = Date.now();
   const sourceErrors = [];
   const selectedSources = [];
   const isHdfcRegalia = /hdfc/i.test(issuer) && /regalia/i.test(cardName) && /gold/i.test(cardName);
-  // HDFC Regalia details are spread across a landing page, a feature page and
-  // dated terms PDFs. Reading just the landing page often captures benefits but
-  // misses the numeric baseline earning rate, so merge several official sources.
-  const maxSources = isHdfcRegalia ? 5 : 3;
-  const candidatesToRead = candidates.slice(0, 10);
-  // Read independent pages concurrently. Keep HDFC batches smaller because PDF
-  // conversion can itself call an AI provider and should not spike free-tier quota.
-  const readBatchSize = isHdfcRegalia ? 2 : 3;
-  for (let offset = 0; offset < candidatesToRead.length && selectedSources.length < maxSources; offset += readBatchSize) {
-    const batch = candidatesToRead.slice(offset, offset + readBatchSize);
-    trace.stage = "read official source batch " + (Math.floor(offset / readBatchSize) + 1);
-    const outcomes = await Promise.all(batch.map(async candidate => {
-      try {
-        const fetched = await fetchOfficialSource(candidate.url, env.AI, env);
-        if (!fetched.text || fetched.text.length < 100) return { candidate, skipped: true };
-        return { candidate, fetched };
-      } catch (error) {
-        return { candidate, error: String(error?.message || error).slice(0, 160) };
-      }
-    }));
-    // Promise.all preserves candidate order, so source ranking remains stable
-    // even when a lower-ranked URL responds first.
+  // Keep a compact evidence bundle for faster model extraction. Regalia has
+  // special handling because some numeric earning/lounges terms live in PDFs.
+  const maxSources = isHdfcRegalia ? 4 : 2;
+  const isPdfCandidate = candidate => /\.pdf(?:[?#]|$)/i.test(String(candidate.url || "")) ||
+    /\bpdf\b/i.test(String(candidate.title || ""));
+  const htmlCandidates = candidates.filter(candidate => !isPdfCandidate(candidate)).slice(0, 5);
+  const pdfCandidates = candidates.filter(isPdfCandidate);
+  if (isHdfcRegalia) {
+    // Preserve the two PDFs that contain Regalia Gold's numeric base rate and
+    // general redemption/fee rules before optional lounge-only documentation.
+    const hdfcPdfPriority = candidate => {
+      const value = (String(candidate.url || "") + " " + String(candidate.title || "")).toLowerCase();
+      if (/travel-edge|reward.*terms|reward.*tnc/.test(value)) return 0;
+      if (/terms-and-conditions|general.*terms/.test(value)) return 1;
+      if (/lounge/.test(value)) return 2;
+      return 3;
+    };
+    pdfCandidates.sort((a, b) => hdfcPdfPriority(a) - hdfcPdfPriority(b) || Number(b.score || 0) - Number(a.score || 0));
+  }
+  pdfCandidates.splice(isHdfcRegalia ? 3 : 2);
+  const readCandidate = async candidate => {
+    try {
+      const fetched = await fetchOfficialSource(candidate.url, env.AI, env);
+      if (!fetched.text || fetched.text.length < 100) return { candidate, skipped: true };
+      return { candidate, fetched };
+    } catch (error) {
+      return { candidate, error: String(error?.message || error).slice(0, 160) };
+    }
+  };
+  const mergeReadOutcomes = outcomes => {
     for (const outcome of outcomes) {
-      if (selectedSources.length >= maxSources) break;
       if (outcome.error) {
         sourceErrors.push(outcome.error);
         continue;
@@ -454,10 +469,32 @@ async function autoExtractCardWithTrace(request, env, trace) {
       selectedSources.push({
         url: fetched.url,
         title: fetched.title || outcome.candidate.title || "Official issuer source",
-        text: fetched.text.slice(0, Math.floor(MAX_SOURCE_CHARS / maxSources))
+        text: fetched.text.slice(0, Math.floor(MAX_AUTO_SOURCE_CHARS / maxSources))
       });
+      if (selectedSources.length >= maxSources) break;
     }
+  };
+
+  // Fetch several HTML pages in one wave. The old implementation fetched 3,
+  // waited for them, then fetched the next 3, potentially adding 30–40 seconds.
+  trace.stage = "read official HTML source batch";
+  const htmlOutcomes = await Promise.all(htmlCandidates.map(readCandidate));
+  mergeReadOutcomes(htmlOutcomes);
+
+  // PDFs may invoke another AI call just to transcribe the file. Defer them until
+  // HTML did not provide enough usable sources, and keep PDF conversion serial to
+  // avoid bursty free-tier quota use.
+  let pdfIndex = 0;
+  while (selectedSources.length < maxSources && pdfIndex < pdfCandidates.length) {
+    trace.stage = "read official PDF fallback " + (pdfIndex + 1);
+    const outcome = await readCandidate(pdfCandidates[pdfIndex++]);
+    const sourcesBeforePdf = selectedSources.length;
+    mergeReadOutcomes([outcome]);
+    if (outcome.error || !outcome.fetched) continue;
+    // For non-HDFC cards, use at most one successfully read PDF as supplementary context.
+    if (!isHdfcRegalia && selectedSources.length > sourcesBeforePdf) break;
   }
+  trace.timings.sourceReadMs = Date.now() - sourceReadStartedAt;
   if (!selectedSources.length) {
     const details = sourceErrors.length
       ? " Details: " + sourceErrors.slice(0, 3).join(" | ")
@@ -466,7 +503,8 @@ async function autoExtractCardWithTrace(request, env, trace) {
       error: "Search found " + candidates.length + " allow-listed official candidate(s), but none could be read." + details + " You can also paste the official card URL in the manual source form.",
       discoveredCandidates: candidates.length,
       sourceErrors: sourceErrors.slice(0, 3),
-      sourceCandidates: candidates.slice(0, 8).map(item => ({ title: item.title, url: item.url }))
+      sourceCandidates: candidates.slice(0, 8).map(item => ({ title: item.title, url: item.url })),
+      timingMs: { ...trace.timings, totalMs: Date.now() - trace.startedAt }
     }, 422);
   }
 
@@ -503,14 +541,18 @@ async function autoExtractCardWithTrace(request, env, trace) {
     })
   });
   trace.stage = "run AI extraction and persist draft";
+  const aiStartedAt = Date.now();
   const extractionResponse = await aiExtract(extractionRequest, env);
+  trace.timings.aiExtractionMs = Date.now() - aiStartedAt;
   trace.stage = "read AI extraction response";
   let result;
   try { result = await extractionResponse.json(); }
   catch { return json({ error: "The extraction service returned an unreadable response." }, 502); }
   trace.stage = "assemble extraction response";
+  trace.timings.totalMs = Date.now() - trace.startedAt;
   return json({
     ...result,
+    timingMs: trace.timings,
     extractionMode: "auto-discovery",
     discovery: {
       issuer,
