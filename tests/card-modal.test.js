@@ -108,13 +108,14 @@ test("Restrictions tab shows exclusions, MCCs and rule-specific conditions", () 
 test("Fees tab distinguishes unknown fees from zero fees and includes fee-waiver conditions", () => {
   const card = {
     annualFee: 2500,
+    joiningFee: 2500,
     annualFeeWaiver: "Waived when annual spend reaches ₹4 lakh",
     officialUrl: "https://issuer.example/fees",
     benefits: [{
-      name: "Joining fee offer",
-      description: "Joining fee waived on qualifying application",
-      conditions: "Offer-specific",
-      sourceQuote: "Joining fee waiver applies",
+      name: "Joining and renewal fee",
+      description: "Joining fee and annual/renewal fee are ₹2,500 each, plus applicable taxes.",
+      conditions: "Renewal fee waived when eligible spend reaches ₹4 lakh within the preceding 12 billing cycles.",
+      sourceQuote: "Joining Fee: ₹2500 plus Applicable Taxes. Renewal Fee: ₹2500 plus Applicable Taxes.",
       sourceUrl: "https://issuer.example/offer"
     }]
   };
@@ -122,9 +123,9 @@ test("Fees tab distinguishes unknown fees from zero fees and includes fee-waiver
   assert.match(html, /Annual fee/);
   assert.match(html, /₹2,500/);
   assert.match(html, /Joining fee/);
-  assert.match(html, /Not separately recorded/);
+  assert.ok(html.includes("₹2,500 + applicable taxes"));
   assert.match(html, /Waived when annual spend reaches ₹4 lakh/);
-  assert.match(html, /Joining fee offer/);
+  assert.match(html, /Joining and renewal fee/);
   assert.match(html, /Missing fee value means it has not been recorded/i);
 });
 
@@ -138,3 +139,27 @@ test("empty tabs explain missing data rather than imply no benefits, rules, rest
 
 if (oldWindow === undefined) delete globalThis.window;
 else globalThis.window = oldWindow;
+
+
+test("Restrictions tab surfaces lounge-related spend thresholds stored as benefits", () => {
+  const card = {
+    officialUrl: "https://issuer.example/card",
+    exclusions: [],
+    rules: [],
+    benefits: [{
+      name: "Domestic airport lounge access",
+      description: "Up to 3 complimentary lounge visits within India in the next calendar quarter.",
+      conditions: "Spend at least ₹60,000 in eligible card transactions in the preceding calendar quarter to unlock 3 visits in the following quarter. Effective 1 July 2026.",
+      sourceQuote: "3 Lounge visits within India per calendar quarter on spends of ₹60,000 or more in the preceding calendar quarter.",
+      sourceUrl: "https://issuer.example/lounge.pdf",
+      validFrom: "2026-07-01"
+    }]
+  };
+  const html = Modal.renderTab(card, "restrictions");
+  assert.match(html, /Benefit eligibility and spend thresholds/);
+  assert.match(html, /Domestic airport lounge access/);
+  assert.match(html, /₹60,000/);
+  assert.match(html, /preceding calendar quarter/);
+  assert.match(html, /https:\/\/issuer\.example\/lounge\.pdf/);
+  assert.match(html, /From 2026-07-01/);
+});

@@ -10,6 +10,7 @@ function fromDbCard(row) {
     network: row.network || "Not specified",
     rewardCurrency: row.reward_currency || "Rewards",
     annualFee: row.annual_fee == null ? null : Number(row.annual_fee),
+    joiningFee: row.joining_fee == null ? null : Number(row.joining_fee),
     annualFeeWaiver: row.annual_fee_waiver || null,
     description: row.description || "",
     officialUrl: row.official_url || null,
