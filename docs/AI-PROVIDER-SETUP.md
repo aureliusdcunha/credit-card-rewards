@@ -8,7 +8,7 @@ The Worker supports Google Gemini API for card-term extraction, with Cloudflare 
 2. In the Cloudflare dashboard, open Workers & Pages → credit-card-rewards-intelligence → Settings → Variables and Secrets.
 3. Add GEMINI_API_KEY as a Secret, not as a plain-text variable. Do not commit the key to GitHub or put it in frontend JavaScript.
 4. Deploy the latest main branch and open /api/health. It should report aiProvider: "gemini" and the selected model.
-5. The default model is gemini-3.5-flash. To choose another available Gemini model, add GEMINI_MODEL as a plain-text Worker variable with the exact model ID, then redeploy.
+5. The default model is gemini-3.8-flash. To choose another available Gemini model, add GEMINI_MODEL as a plain-text Worker variable with the exact model ID, then redeploy. By default, transient overloads are retried and the Worker falls back to gemini-3.5-flash-lite, then gemini-3.6-flash. You can override this chain with GEMINI_FALLBACK_MODELS (comma-separated model IDs).
 
 You can also add the secret from a terminal in the repository with:
 
@@ -18,7 +18,7 @@ npx wrangler secret put GEMINI_API_KEY
 
 ### Free-tier limits and data handling
 
-Google's free tier has model-specific rate limits. When quota is reached, Source Review will show the Gemini HTTP status and a quota/rate-limit hint; wait for the quota reset or check AI Studio usage.
+Google's free tier has model-specific rate limits. When quota is reached, Source Review will try configured fallback models. If all fallback attempts fail, it will show the provider status and attempted model names; wait for quota reset or check AI Studio usage.
 
 Google's pricing documentation says content submitted under the free tier may be used to improve its products. This app sends the official card-term text it has collected for extraction. Do not send personal or confidential information through the free-tier API.
 
