@@ -485,8 +485,7 @@ async function autoExtractCardWithTrace(request, env, trace) {
   // HTML did not provide enough usable sources, and keep PDF conversion serial to
   // avoid bursty free-tier quota use.
   let pdfIndex = 0;
-  while (selectedSources.length < maxSources && pdfIndex < pdfCandidates.length &&
-         (selectedSources.length === 0 || (isHdfcRegalia && selectedSources.length < maxSources))) {
+  while (selectedSources.length < maxSources && pdfIndex < pdfCandidates.length) {
     trace.stage = "read official PDF fallback " + (pdfIndex + 1);
     const outcome = await readCandidate(pdfCandidates[pdfIndex++]);
     const sourcesBeforePdf = selectedSources.length;
