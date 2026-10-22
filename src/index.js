@@ -468,8 +468,8 @@ async function autoExtractCardWithTrace(request, env, trace) {
     });
   }
   if (isHdfcRegalia) {
-    // Preserve the two PDFs that contain Regalia Gold's numeric base rate and
-    // general redemption/fee rules before optional lounge-only documentation.
+    // Read the current numeric reward PDF before general or lounge-only PDFs.
+    // The top-ranked HTML fee page above supplies the joining/renewal amount.
     const hdfcPdfPriority = candidate => {
       const value = (String(candidate.url || "") + " " + String(candidate.title || "")).toLowerCase();
       if (/travel-edge|reward.*terms|reward.*tnc/.test(value)) return 0;
