@@ -134,7 +134,7 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
   if (joiningFact || annualFact || feeWaiverFact) {
     const primaryFact = joiningFact || annualFact || feeWaiverFact;
     upsertBenefit(data, {
-      name: "Joining and renewal fee",
+      name: "Joining and annual fee",
       description: "Joining fee and annual/renewal fee are ₹2,500 each, plus applicable taxes.",
       conditions: "Renewal fee waiver requires eligible retail spends of ₹4,00,000 within the preceding 12 billing cycles of the anniversary year.",
       sourceQuote: [joiningFact?.quote, annualFact?.quote, feeWaiverFact?.quote].filter(Boolean).join(" "),
@@ -207,12 +207,6 @@ function officialClauses(sections) {
   return clauses;
 }
 
-function numericCurrencyAmount(quote) {
-  const match = String(quote || "").match(/(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)/i);
-  if (!match) return null;
-  const amount = Number(match[1].replace(/,/g, ""));
-  return Number.isFinite(amount) ? amount : null;
-}
 
 function explicitFeeFact(clauses, feeKind) {
   const isJoining = feeKind === "joining";
