@@ -205,7 +205,7 @@ async function persistDraft(env, data) {
       await env.DB.prepare(`UPDATE extraction_drafts
         SET card_id = ?, source_url = ?, source_title = ?, source_excerpt = ?, extracted_json = ?, created_at = ?
         WHERE id = ? AND status = 'needs_review'`)
-        .bind(data.cardId || null, data.sourceUrl, data.sourceTitle || "Official terms", data.sourceExcerpt.slice(0, 8000), extractedJson, now, keeper.id)
+        .bind(data.cardId || keeper.card_id || null, data.sourceUrl, data.sourceTitle || "Official terms", data.sourceExcerpt.slice(0, 8000), extractedJson, now, keeper.id)
         .run();
       for (const duplicate of matches.slice(1)) {
         await env.DB.prepare("UPDATE extraction_drafts SET status = 'superseded' WHERE id = ? AND status = 'needs_review'")
