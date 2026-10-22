@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
 import { APP_VERSION, APP_BUILD } from "../src/version.js";
+import { DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_FALLBACK_MODELS } from "../src/model-provider.js";
 
 test("health endpoint exposes the same version and build shown by the frontend release badge", async () => {
   const response = await worker.fetch(new Request("https://app.example/api/health"), {
@@ -35,8 +36,9 @@ test("health endpoint reports Gemini as the extraction provider without revealin
   const health = await response.json();
   assert.equal(health.aiConfigured, true);
   assert.equal(health.aiProvider, "gemini");
-  assert.equal(health.aiModel, "gemini-3.5-flash");
+  assert.equal(health.aiModel, DEFAULT_GEMINI_MODEL);
   assert.equal(health.pdfConversionConfigured, true);
   assert.equal(health.pdfConversionProvider, "gemini");
+  assert.deepEqual(health.aiFallbackModels, DEFAULT_GEMINI_FALLBACK_MODELS);
   assert.equal(JSON.stringify(health).includes("do-not-expose-this-key"), false);
 });
