@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
-import { discoverOfficialUrls } from "../src/source-discovery.js";
+import { discoverOfficialUrls, parseDuckDuckGoLiteResults } from "../src/source-discovery.js";
 
 test("auto discovery finds an official issuer source and saves an unverified draft", async () => {
   const originalFetch = globalThis.fetch;
@@ -83,4 +83,34 @@ test("falls back to a known official Axis Horizon page when search providers ret
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+
+test("falls back to HDFC Bank's official Regalia Gold page when search providers return no results", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async raw => {
+    const url = new URL(typeof raw === "string" ? raw : raw.url || raw.toString());
+    if (url.hostname === "html.duckduckgo.com" || url.hostname === "lite.duckduckgo.com" || url.hostname === "www.bing.com") {
+      return new Response("<html><body>No parseable results</body></html>", {
+        status: 200,
+        headers: { "content-type": url.hostname === "www.bing.com" ? "application/rss+xml" : "text/html" }
+      });
+    }
+    throw new Error("Unexpected outbound test URL: " + url.hostname);
+  };
+  try {
+    const results = await discoverOfficialUrls("HDFC Bank", "Regalia Gold");
+    assert.equal(results[0].url, "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card");
+    assert.ok(results.some(item => item.url.includes("RG-T-and-Cs-PDF.pdf")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("DuckDuckGo lite parser accepts official issuer anchors without result__a classes", () => {
+  const html = '<a href="https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card">Regalia Gold Credit Card</a>' +
+    '<a href="https://not-an-issuer.example/credit-card">untrusted</a>';
+  const results = parseDuckDuckGoLiteResults(html, "hdfc.bank.in");
+  assert.equal(results.length, 1);
+  assert.equal(results[0].url, "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card");
 });
