@@ -1,5 +1,5 @@
 export const OFFICIAL_DOMAINS = [
-  "axisbank.com", "axis.bank.in", "hdfcbank.com", "icicibank.com", "sbicard.com", "sbi.co.in",
+  "axisbank.com", "axis.bank.in", "hdfcbank.com", "hdfc.bank.in", "icicibank.com", "sbicard.com", "sbi.co.in",
   "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
   "hsbc.co.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
   "federalbank.co.in", "aubank.in", "au.bank.in", "standardchartered.co.in"
@@ -7,7 +7,7 @@ export const OFFICIAL_DOMAINS = [
 
 const ISSUER_DOMAIN_MAP = [
   { terms: ["axis"], domain: "axis.bank.in" },
-  { terms: ["hdfc"], domain: "hdfcbank.com" },
+  { terms: ["hdfc"], domain: "hdfc.bank.in" },
   { terms: ["icici"], domain: "icicibank.com" },
   { terms: ["sbi", "state bank", "sbicard"], domain: "sbicard.com" },
   { terms: ["kotak"], domain: "kotak.com" },
@@ -94,6 +94,33 @@ export function parseDuckDuckGoResults(html, expectedDomain = null) {
   return results.sort((a, b) => b.score - a.score).slice(0, 12);
 }
 
+export function parseDuckDuckGoLiteResults(html, expectedDomain = null) {
+  const results = [];
+  const seen = new Set();
+  const anchorRegex = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  for (const match of String(html || "").matchAll(anchorRegex)) {
+    const attrs = match[1] || "";
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])(.*?)\1/i);
+    if (!hrefMatch) continue;
+    const rawUrl = unwrapSearchUrl(hrefMatch[2]);
+    if (!rawUrl) continue;
+    let parsed;
+    try { parsed = validateOfficialUrl(rawUrl); } catch { continue; }
+    const host = parsed.hostname.toLowerCase();
+    if (expectedDomain && host !== expectedDomain && !host.endsWith("." + expectedDomain)) continue;
+    parsed.hash = "";
+    const url = parsed.toString();
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const title = stripMarkup(match[2]).slice(0, 240) || host;
+    const scoreText = (title + " " + parsed.pathname + " " + parsed.search).toLowerCase();
+    const score = ["terms", "condition", "reward", "points", "exclusion", "mitc", "benefit", ".pdf", "credit-card", "creditcard", "regalia", "horizon"]
+      .reduce((total, word) => total + (scoreText.includes(word) ? 1 : 0), 0);
+    results.push({ url, title, domain: host, score });
+  }
+  return results.sort((a, b) => b.score - a.score).slice(0, 12);
+}
+
 export function parseBingRssResults(xml, expectedDomain = null) {
   const results = [];
   const seen = new Set();
@@ -122,6 +149,22 @@ export function parseBingRssResults(xml, expectedDomain = null) {
 function knownOfficialFallbacks(issuer, cardName) {
   const issuerText = String(issuer || "").toLowerCase();
   const cardText = String(cardName || "").toLowerCase();
+  if (issuerText.includes("hdfc") && cardText.includes("regalia") && cardText.includes("gold")) {
+    return [
+      {
+        url: "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card",
+        title: "HDFC Bank Regalia Gold Credit Card",
+        domain: "www.hdfc.bank.in",
+        score: 110
+      },
+      {
+        url: "https://www.hdfcbank.com/content/bbp/repositories/723fb80a-2dde-42a3-9793-7ae1be57c87f/?path=%2FPersonal%2FPay%2FCards%2FCredit+Card%2FCredit+Card+Landing+Page%2FCredit+Cards%2FSuper+Premium%2FRegalia+Gold+Credit+Card%2FRG-T-and-Cs-PDF.pdf",
+        title: "HDFC Bank Regalia Gold Credit Card General Terms and Conditions",
+        domain: "www.hdfcbank.com",
+        score: 109
+      }
+    ];
+  }
   if (issuerText.includes("axis") && cardText.includes("horizon")) {
     return [
       {
@@ -169,8 +212,30 @@ export async function discoverOfficialUrls(issuer, cardName) {
       if (!existing || result.score > existing.score) combined.set(result.url, result);
     }
   }
-  // Search-result HTML changes and rate-limiting can make the first provider temporarily unusable.
-  // If DuckDuckGo yields no allow-listed links, try Bing's RSS output as a second parser-friendly source.
+  // Search-result HTML can change or be simplified by bot protection. Try DuckDuckGo's
+  // lighter results page with a looser anchor parser before using another provider.
+  if (!combined.size) {
+    for (const query of queries.slice(0, 2)) {
+      let response;
+      try {
+        response = await fetch("https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query), {
+          headers: {
+            "accept": "text/html",
+            "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.1)"
+          }
+        });
+      } catch { continue; }
+      if (!response.ok) continue;
+      const html = (await response.text()).slice(0, 1200000);
+      for (const result of parseDuckDuckGoLiteResults(html, domain)) {
+        const existing = combined.get(result.url);
+        if (!existing || result.score > existing.score) combined.set(result.url, result);
+      }
+      if (combined.size) break;
+    }
+  }
+
+  // If DuckDuckGo variants yield no allow-listed links, try Bing's RSS output.
   if (!combined.size) {
     for (const query of queries.slice(0, 2)) {
       let response;
