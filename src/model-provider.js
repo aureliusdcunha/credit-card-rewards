@@ -22,6 +22,13 @@ export async function generateWithGemini(env, { prompt, systemPrompt, maxOutputT
   const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent";
 
   let response;
+  const timeoutMs = maxOutputTokens >= 8000 ? 40000 : 22000;
+  const timeoutOptions = {};
+  try {
+    if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+      timeoutOptions.signal = AbortSignal.timeout(timeoutMs);
+    }
+  } catch {}
   try {
     response = await fetch(endpoint, {
       method: "POST",
@@ -43,10 +50,20 @@ export async function generateWithGemini(env, { prompt, systemPrompt, maxOutputT
           maxOutputTokens,
           responseMimeType: "application/json"
         }
-      })
+      }),
+      ...timeoutOptions
     });
   } catch (error) {
-    throw new Error("Gemini network request failed: " + String(error?.message || error).slice(0, 180));
+    const isTimeout = error?.name === "TimeoutError" || error?.name === "AbortError";
+    const networkError = new Error(
+      "Gemini " + (isTimeout ? "request timed out after " + Math.round(timeoutMs / 1000) + " seconds" : "network request failed") +
+      ": " + String(error?.message || error).slice(0, 180)
+    );
+    if (isTimeout) {
+      networkError.status = 408;
+      networkError.isTimeout = true;
+    }
+    throw networkError;
   }
 
   let payload;
@@ -125,6 +142,9 @@ export async function generateWithGeminiResilient(env, requestOptions = {}) {
           message: String(error?.message || error || "unknown error").slice(0, 260)
         });
         if (!isRetryableGeminiStatus(error?.status)) throw error;
+        // Move to the next model immediately after a hard request timeout instead
+        // of waiting through another timeout on the same model.
+        if (error?.isTimeout) break;
         if (attempt === 0 && modelIndex === 0) {
           // Google recommends exponential backoff for transient 429/5xx errors.
           await wait(450);
