@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts } from "../src/issuer-normalizers.js";
+import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts, normalizeSbiSimplySaveExtraction } from "../src/issuer-normalizers.js";
 
 const termsUrl = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-travel-edge-tnc.pdf";
 const cardUrl = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
@@ -385,4 +385,92 @@ test("does not infer a card network from unrelated references to network brands"
   normalizeCommonCardFacts(draft, { sourceText, sourceUrl });
   assert.equal(draft.network, null);
   assert.match(draft.missingItems.join(" "), /Could not verify the payment network/i);
+});
+
+
+test("extracts source-backed SimplySAVE base and accelerated reward rules plus the shared monthly cap", () => {
+  const productUrl = "https://www.sbicard.com/en/personal/credit-cards/simplysave-sbi-card.html";
+  const termsUrl = "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplySAVE-TnC.pdf";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: SimplySAVE SBI Card",
+    "URL: " + productUrl,
+    "SOURCE TEXT START",
+    "Earn 10X Reward Points per Rs. 150 spent on dining, movies, departmental stores and grocery.",
+    "On all other spends, earn 1 Reward Point per Rs. 150 spent.",
+    "SOURCE TEXT END",
+    "",
+    "OFFICIAL SOURCE 2",
+    "TITLE: SimplySAVE SBI Card reward terms and conditions",
+    "URL: " + termsUrl,
+    "SOURCE TEXT START",
+    "Terms & Conditions - Reward Points. Earn 10 Reward Points for every Rs.150 spent on Dining, Movies, Groceries & Departmental stores and 1 Reward Point for every Rs. 150 spent on all other categories.",
+    "Maximum Cap of 5,000 Reward Point/Month - Cumulative 10X Reward Points accrued on Dining, Movies, Departmental Store & Grocery spends for your SimplySAVE SBI Card will have a maximum cap of 5,000 Reward Points per month. After the maximum cap of 5,000 reward points is achieved, 1 Reward Point for every Rs.150 spent, as per the card policy, will continue to accrue.",
+    "SOURCE TEXT END"
+  ].join("\\n");
+  const draft = {
+    issuer: "SBI",
+    cardName: "simplysave",
+    rewardCurrency: "Reward Points",
+    rules: [],
+    benefits: [],
+    exclusions: [],
+    missingItems: ["Reward rates and card network details are not provided in the supplied text."]
+  };
+
+  normalizeSbiSimplySaveExtraction(draft, {
+    issuer: "SBI",
+    cardName: "simplysave",
+    sourceText,
+    sourceUrl: productUrl
+  });
+
+  assert.equal(draft.rules.length, 5);
+  const base = draft.rules.find(rule => rule.category === "general");
+  assert.deepEqual(
+    draft.rules.filter(rule => rule.category !== "general").map(rule => rule.category).sort(),
+    ["departmental_stores", "dining", "groceries", "movies"]
+  );
+  assert.equal(base.rate, 1);
+  assert.equal(base.perAmount, 150);
+  assert.equal(base.unit, "Reward Points");
+  assert.equal(base.sourceUrl, productUrl);
+  for (const rule of draft.rules.filter(rule => rule.category !== "general")) {
+    assert.equal(rule.rate, 10);
+    assert.equal(rule.perAmount, 150);
+    assert.equal(rule.unit, "Reward Points");
+    assert.deepEqual(rule.cap, {
+      type: "points",
+      value: 5000,
+      period: "calendar_month",
+      overCapCategory: "general"
+    });
+    assert.match(rule.sourceQuote, /10(?:X| Reward Points)|10 Reward Points/i);
+    assert.equal(rule.sourceUrl, productUrl);
+    assert.match(rule.notes, /cumulative.*shared cap/i);
+  }
+  assert.equal(draft.missingItems.some(item => /reward rates?.*not provided/i.test(item)), false);
+  const capBenefit = draft.benefits.find(item => item.name === "Accelerated reward monthly cap");
+  assert.ok(capBenefit);
+  assert.match(capBenefit.sourceQuote, /5,000 Reward Point\/Month/i);
+  assert.equal(capBenefit.sourceUrl, termsUrl);
+});
+
+test("does not create accelerated SimplySAVE rules if the monthly cap cannot be verified", () => {
+  const productUrl = "https://www.sbicard.com/en/personal/credit-cards/simplysave-sbi-card.html";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: SimplySAVE SBI Card",
+    "URL: " + productUrl,
+    "SOURCE TEXT START",
+    "Earn 10X Reward Points per Rs. 150 spent on dining, movies, departmental stores and grocery.",
+    "On all other spends, earn 1 Reward Point per Rs. 150 spent.",
+    "SOURCE TEXT END"
+  ].join("\\n");
+  const draft = { issuer: "SBI", cardName: "SimplySAVE", rules: [], benefits: [], missingItems: [], exclusions: [] };
+  normalizeSbiSimplySaveExtraction(draft, { issuer: draft.issuer, cardName: draft.cardName, sourceText, sourceUrl: productUrl });
+  assert.equal(draft.rules.length, 1);
+  assert.equal(draft.rules[0].category, "general");
+  assert.ok(draft.benefits.some(item => /accelerated.*needs complete verification/i.test(item.name)));
+  assert.match(draft.missingItems.join(" "), /monthly cap/i);
 });
