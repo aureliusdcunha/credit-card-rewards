@@ -74,7 +74,17 @@ function validateOfficialUrl(raw) {
   }
   return url;
 }
-async function fetchOfficialSource(rawUrl, aiBinding) {
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}) {
   let current = validateOfficialUrl(rawUrl);
   for (let redirectCount = 0; redirectCount <= 3; redirectCount++) {
     const response = await fetch(current.toString(), {
@@ -93,25 +103,37 @@ async function fetchOfficialSource(rawUrl, aiBinding) {
     const declared = Number(response.headers.get("content-length") || 0);
     const isPdf = contentType.includes("pdf") || current.href.toLowerCase().includes(".pdf");
     if (isPdf) {
-      if (!aiBinding || typeof aiBinding.toMarkdown !== "function") {
-        throw new Error("This is a PDF but the Workers AI Markdown-conversion method is unavailable. Paste the relevant text from the PDF instead.");
-      }
       if (declared > MAX_PDF_BYTES) throw new Error("The PDF is too large for the first-version importer (8 MB maximum). Paste the relevant reward and exclusion sections.");
       const bytes = await response.arrayBuffer();
       if (bytes.byteLength > MAX_PDF_BYTES) throw new Error("The PDF is too large for the first-version importer (8 MB maximum). Paste the relevant reward and exclusion sections.");
+      const fileName = current.pathname.split("/").pop() || "issuer-terms.pdf";
       try {
-        const fileName = current.pathname.split("/").pop() || "issuer-terms.pdf";
-        const converted = await aiBinding.toMarkdown({ name: fileName, blob: new Blob([bytes], { type: "application/pdf" }) });
-        const documentResult = Array.isArray(converted) ? converted[0] : converted;
-        if (!documentResult || documentResult.format === "error" || !documentResult.data) {
-          throw new Error(documentResult?.error || "No readable text was returned from the PDF conversion.");
+        let extracted;
+        if (String(providerEnv.GEMINI_API_KEY || "").trim()) {
+          const converted = await generateWithGemini(providerEnv, {
+            systemPrompt: "Extract readable text from the supplied official bank PDF as faithfully as possible. Preserve amounts, dates, tables, eligibility conditions and exact wording. Do not summarize, infer, or add facts. Return only extracted document text.",
+            prompt: "Transcribe the relevant contents of this Indian credit-card terms PDF. Keep reward rates, spend thresholds, fees, tax notes, lounge conditions, exclusions, effective dates and caps exactly as stated.",
+            inlineData: { mimeType: "application/pdf", data: arrayBufferToBase64(bytes) },
+            maxOutputTokens: 12000,
+            temperature: 0
+          });
+          extracted = normalizeText(converted.text);
+        } else {
+          if (!aiBinding || typeof aiBinding.toMarkdown !== "function") {
+            throw new Error("This PDF needs either GEMINI_API_KEY or the Cloudflare AI Markdown-conversion method. Paste the relevant terms text if neither is configured.");
+          }
+          const converted = await aiBinding.toMarkdown({ name: fileName, blob: new Blob([bytes], { type: "application/pdf" }) });
+          const documentResult = Array.isArray(converted) ? converted[0] : converted;
+          if (!documentResult || documentResult.format === "error" || !documentResult.data) {
+            throw new Error(documentResult?.error || "No readable text was returned from the PDF conversion.");
+          }
+          extracted = normalizeText(documentResult.data);
         }
-        const extracted = normalizeText(documentResult.data);
         if (extracted.length < 100) throw new Error("Very little readable text was extracted from the PDF.");
         return { url: current.toString(), title: fileName, text: extracted.slice(0, MAX_SOURCE_CHARS) };
       } catch (error) {
-        console.error("PDF-to-Markdown conversion failed:", error?.message || error);
-        throw new Error("Could not extract readable text from this PDF. Paste the relevant reward and exclusion text manually. No rules were published.");
+        console.error("PDF conversion failed:", error?.message || error);
+        throw new Error("Could not extract readable text from this PDF. " + String(error?.message || error).slice(0, 240) + " No rules were published.");
       }
     }
     if (!(contentType.includes("text/html") || contentType.includes("text/plain") || contentType.includes("application/xhtml+xml"))) {
@@ -244,7 +266,7 @@ async function aiExtract(request, env) {
   let sourceTitle = intake.sourceTitle;
   if (!sourceText) {
     try {
-      const fetched = await fetchOfficialSource(intake.sourceUrl, env.AI);
+      const fetched = await fetchOfficialSource(intake.sourceUrl, env.AI, env);
       sourceText = fetched.text;
       sourceTitle = fetched.title;
       intake.sourceUrl = fetched.url;
@@ -377,7 +399,7 @@ async function autoExtractCardWithTrace(request, env, trace) {
     if (selectedSources.length >= maxSources) break;
     trace.stage = "read official source " + (selectedSources.length + 1);
     try {
-      const fetched = await fetchOfficialSource(candidate.url, env.AI);
+      const fetched = await fetchOfficialSource(candidate.url, env.AI, env);
       if (!fetched.text || fetched.text.length < 100) continue;
       const url = fetched.url;
       if (selectedSources.some(source => source.url === url)) continue;
@@ -603,7 +625,7 @@ async function handleApi(request, env) {
   const method = request.method.toUpperCase();
 
   if (method === "GET" && path === "/api/health") {
-    return json({ ok: true, app: "Credit Card Rewards Intelligence", version: APP_VERSION, build: APP_BUILD, release: `v${APP_VERSION}+${APP_BUILD}`, mode: env.DB ? "d1" : "demo", aiConfigured: getAiProvider(env).configured, aiProvider: getAiProvider(env).provider, aiModel: getAiProvider(env).model, pdfConversionConfigured: Boolean(env.AI && typeof env.AI.toMarkdown === "function"), adminConfigured: Boolean(env.ADMIN_TOKEN), timestamp: new Date().toISOString() });
+    return json({ ok: true, app: "Credit Card Rewards Intelligence", version: APP_VERSION, build: APP_BUILD, release: `v${APP_VERSION}+${APP_BUILD}`, mode: env.DB ? "d1" : "demo", aiConfigured: getAiProvider(env).configured, aiProvider: getAiProvider(env).provider, aiModel: getAiProvider(env).model, pdfConversionConfigured: Boolean(String(env.GEMINI_API_KEY || "").trim() || (env.AI && typeof env.AI.toMarkdown === "function")), pdfConversionProvider: String(env.GEMINI_API_KEY || "").trim() ? "gemini" : env.AI && typeof env.AI.toMarkdown === "function" ? "cloudflare" : "none", adminConfigured: Boolean(env.ADMIN_TOKEN), timestamp: new Date().toISOString() });
   }
   if (method === "GET" && path === "/api/cards") {
     const cards = await getCards(env);
