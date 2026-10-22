@@ -512,11 +512,6 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const domain = issuerDomainFor(issuerValue);
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   const safeIssuer = issuerValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
-  const productQueries = [
-    "\"" + safeIssuer + "\" \"" + safeCard + "\" credit card rewards points terms conditions",
-    "\"" + safeIssuer + "\" \"" + safeCard + "\" rewards exclusions annual fee PDF",
-    "\"" + safeIssuer + "\" \"" + safeCard + "\" credit card MITC benefits reward programme"
-  ];
   const queries = domain
     ? [
         "site:" + domain + " \"" + safeCard + "\" credit card rewards points terms conditions",
@@ -549,7 +544,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   };
   const readSearchResults = async (url, headers, parser) => {
     try {
-      const response = await fetch(url, { headers, ...discoveryTimeoutOptions(6500) });
+      const response = await fetch(url, { headers, ...discoveryTimeoutOptions(4500) });
       if (!response.ok) return [];
       const body = (await response.text()).slice(0, 1200000);
       return parser(body, domain);
