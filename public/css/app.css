@@ -1100,3 +1100,70 @@ textarea::selection,
 @media(prefers-reduced-motion:reduce) {
   .compare-option { transition:none; }
 }
+
+
+/* 0.6.1 Compare page view tabs */
+.compare-picker-heading {
+  display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap;
+}
+.compare-picker-heading .field-help { margin-top:5px; }
+.compare-selection-chip {
+  border:1px solid #355950; background:#15302e; color:#82e5c8;
+  border-radius:5px; padding:6px 9px; font:8px ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.25px; white-space:nowrap;
+}
+.compare-selection-chip.is-ready { border-color:#3a7467; background:#183a34; }
+.compare-tabs {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px;
+  padding:6px; margin:21px 0 14px; border:1px solid #2a3b47; border-radius:9px;
+  background:#101922;
+}
+.compare-tab {
+  display:flex; align-items:center; justify-content:flex-start; gap:12px; min-width:0;
+  padding:13px 16px; text-align:left; border:1px solid transparent; border-radius:6px;
+  color:#8fa5b4; background:transparent; cursor:pointer;
+  transition:background .14s,color .14s,border-color .14s;
+}
+.compare-tab:hover { color:#e5f3f5; background:#1a2a34; border-color:#2c4652; }
+.compare-tab.is-active,
+.compare-tab[aria-selected="true"] {
+  color:#eaf8f5; background:#193631; border-color:#35675d;
+  box-shadow:inset 0 2px 0 #55d6b3;
+}
+.compare-tab-index {
+  display:inline-flex; align-items:center; justify-content:center; flex:0 0 31px;
+  height:31px; border:1px solid #304753; border-radius:5px; color:#83a0ad;
+  background:#14212a; font:9px ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+.compare-tab.is-active .compare-tab-index { color:#70e0bc; background:#1c4039; border-color:#3c7468; }
+.compare-tab>span:last-child { display:flex; flex-direction:column; gap:4px; }
+.compare-tab b { color:inherit; font:600 12px 'DM Sans',sans-serif; }
+.compare-tab small { color:#78919f; font:8px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.15px; }
+.compare-tab.is-active small { color:#9bc6bd; }
+.compare-tab:focus-visible { outline:2px solid #70e0bc; outline-offset:1px; }
+.compare-tab-panel[hidden] { display:none !important; }
+.compare-tab-panel { min-width:0; }
+.compare-scenario-panel { margin-top:0; }
+.compare-scenario-panel .panel-header { align-items:center; }
+.compare-form { display:grid; grid-template-columns:1fr 1.35fr 1fr auto; align-items:end; gap:12px; }
+.compare-form .compare-field { min-width:0; }
+.compare-form .button { white-space:nowrap; min-height:39px; }
+.compare-panel-caption { color:#7d9aa9; font:9px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.compare-results { align-items:stretch; }
+.compare-results .compare-card-result { min-width:0; }
+@media(max-width:900px) {
+  .compare-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .compare-form .button { width:100%; }
+}
+@media(max-width:600px) {
+  .compare-tabs { gap:4px; padding:4px; margin:15px 0 11px; }
+  .compare-tab { padding:10px 9px; gap:8px; }
+  .compare-tab-index { flex-basis:26px; height:26px; font-size:8px; }
+  .compare-tab b { font-size:11px; }
+  .compare-tab small { font-size:7px; line-height:1.5; }
+  .compare-form { grid-template-columns:minmax(0,1fr); }
+  .compare-picker-heading { flex-direction:column; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .compare-tab { transition:none; }
+}
