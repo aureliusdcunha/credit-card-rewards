@@ -143,6 +143,7 @@
     const payload = {
       issuer: document.getElementById("discover-issuer").value.trim(),
       cardName: document.getElementById("discover-card-name").value.trim(),
+      sourceUrl: document.getElementById("discover-source-url")?.value.trim() || "",
       cardId: cardSelect.value || null
     };
     if (!payload.issuer || !payload.cardName) {
@@ -150,7 +151,7 @@
       return;
     }
     discoverButton.disabled = true;
-    discoverButton.textContent = "Searching official sources…";
+    discoverButton.textContent = payload.sourceUrl ? "Reading supplied official source…" : "Searching official sources…";
     try {
       const response = await C.request("/admin/auto-extract", { method: "POST", body: JSON.stringify(payload) });
       currentDraftId = response.draftId;
@@ -161,7 +162,9 @@
       openDraft(draft);
       const discovery = response.discovery || {};
       discoverSuccess.textContent = (response.deduplicated ? "Updated the existing pending draft in D1. " : response.persisted ? "Draft saved to D1. " : "Draft generated but not persisted. ") +
-        "Found " + (discovery.candidatesFound || 0) + " official-source candidate(s); selected " + (response.sourceTitle || "one readable issuer source") + ". " +
+        (discovery.suppliedSourceUrl
+          ? "Used your supplied official URL as the starting point and selected " + (response.sourceTitle || "a readable issuer source") + ". "
+          : "Found " + (discovery.candidatesFound || 0) + " official-source candidate(s); selected " + (response.sourceTitle || "one readable issuer source") + ". ") +
         (response.warning || "Review before publishing.");
       if (discovery.sourceCandidates && discovery.sourceCandidates.length) {
         discoverSuccess.textContent += " Candidate URLs: " + discovery.sourceCandidates.map(item => item.url).join(" | ");
