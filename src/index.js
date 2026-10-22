@@ -159,6 +159,7 @@ async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}, cardName
       url: current.toString(),
       title: document.title || current.hostname,
       text: document.text.slice(0, MAX_SOURCE_CHARS),
+      readableTextLength: document.readableTextLength,
       relatedUrls: document.relatedUrls,
       javascriptHeavy: document.javascriptHeavy
     };
