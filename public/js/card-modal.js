@@ -45,7 +45,7 @@
     const approvedRules = rules.filter(rule => rule.status === "approved").length;
     let html = sectionIntro("EARNING RULES // APPROVED RATE MATRIX", rules.length + " record(s) · " + approvedRules + " approved");
     if (!rules.length) {
-      return html + emptyState("No earning rules recorded", "This card can have details and benefits without a verified earning rule. Do not use an estimated reward rate until a complete rate, spend basis, reward unit and official source quote have been reviewed.");
+      return html + emptyState("No reward rules available", "This card can have details and benefits without a verified earning rule. Do not use an estimated reward rate until a complete rate, spend basis, reward unit and official source quote have been reviewed.");
     }
     html += '<div class="terminal-table-wrap"><table class="terminal-table"><thead><tr>' +
       '<th scope="col">Category</th><th scope="col">Earning formula</th><th scope="col">Minimum</th><th scope="col">Cap / limit</th><th scope="col">Validity</th><th scope="col">Status / evidence</th>' +
