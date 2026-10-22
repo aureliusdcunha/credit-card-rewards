@@ -2,6 +2,13 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.6 — 23 October 2026
+
+- If a supplied official product page returns only a JavaScript shell, try its parent issuer catalogue pages before broad search. This works across nested issuer URL structures rather than hard-coding the YES BANK Uni URL.
+- Focus catalogue-page extraction on the selected card's matching heading and stop at the next card heading, avoiding unrelated card variants in the same catalogue.
+- When an existing card is selected, send its exact catalogue name to extraction rather than a shortened typed alias.
+- Align package/backend version, navigation pill, every page footer, asset cache keys and source-discovery user agent to **0.6.6 / build 20261023.04**.
+
 ## Release 0.6.5 — 23 October 2026
 
 - Treat a supplied official card URL as the preferred starting point, not the only source. If it yields no readable terms, continue with related official links and normal issuer-wide source discovery.

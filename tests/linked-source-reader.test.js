@@ -258,3 +258,81 @@ test("falls back to issuer-wide official source discovery when a supplied produc
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("uses the supplied product URL's parent catalogue when the product page is JavaScript-only", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  let extractionPrompt = "";
+  const startUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card";
+  const catalogueUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/";
+  const catalogueHtml = '<html><head><title>Credit Cards | YES BANK</title></head><body><main>' +
+    '<section><article><h3>UNI Credit Card</h3>' +
+    '<p>Joining Fees 0. Renewal Fees ₹499.</p>' +
+    '<p>1% cash back in Uni Coins on all transactions.</p>' +
+    '<p>0% foreign currency conversion charges for international transactions.</p>' +
+    '<p>1% fuel surcharge waiver on fuel transactions.</p></article>' +
+    '<article><h3>UNI Rupay Credit Card</h3><p>Joining Fees 0. Renewal Fees ₹0.</p>' +
+    '<p>Different rewards and eligibility conditions for this other variant.</p></article>' +
+    '<article><h3>Zagg Credit Card</h3><p>Two domestic lounge visits subject to spend eligibility.</p></article>' +
+    '</section></main></body></html>';
+  const validDraft = {
+    issuer: "Yes Bank", cardName: "UNI Credit Card", network: null, rewardCurrency: "Uni Coins",
+    annualFee: 499, joiningFee: 0, annualFeeWaiver: null, effectiveDate: null,
+    rules: [], exclusions: [], benefits: [],
+    missingItems: ["Confirm the current reward programme limitations from dedicated terms."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+
+    if (url.toString() === startUrl) {
+      return new Response(
+        '<html><head><title>UNI Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><script src="/assets/uni-app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === catalogueUrl || url.toString() === catalogueUrl.slice(0, -1)) {
+      return new Response(catalogueHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    if (["html.duckduckgo.com", "lite.duckduckgo.com", "www.bing.com"].includes(url.hostname)) {
+      throw new Error("Search should not be needed if the parent official catalogue is readable.");
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "Yes Bank", cardName: "UNI Credit Card", sourceUrl: startUrl })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async run(_model, request) {
+          extractionPrompt = request.messages?.[1]?.content || "";
+          return { response: JSON.stringify(validDraft) };
+        }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.suppliedSourceUrl, true);
+    assert.equal(body.discovery.selectedSource, catalogueUrl);
+    assert.ok(fetchedUrls.includes(startUrl));
+    assert.ok(fetchedUrls.includes(catalogueUrl));
+    assert.match(extractionPrompt, /1% cash back in Uni Coins on all transactions/);
+    assert.match(extractionPrompt, /Renewal Fees ₹499/);
+    assert.doesNotMatch(extractionPrompt, /UNI Rupay Credit Card|Zagg Credit Card|Different rewards/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

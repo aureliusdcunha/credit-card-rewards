@@ -140,9 +140,15 @@
       discoverError.textContent = "Enter and verify the admin token before running AI discovery.";
       return;
     }
+    const issuerInput = document.getElementById("discover-issuer").value.trim();
+    const typedCardName = document.getElementById("discover-card-name").value.trim();
+    const selectedExistingCard = cards.find(card => String(card.id) === String(cardSelect.value));
+    const sameIssuer = selectedExistingCard &&
+      String(selectedExistingCard.issuer || "").trim().toLowerCase().replace(/\s+/g, " ") ===
+      issuerInput.toLowerCase().replace(/\s+/g, " ");
     const payload = {
-      issuer: document.getElementById("discover-issuer").value.trim(),
-      cardName: document.getElementById("discover-card-name").value.trim(),
+      issuer: sameIssuer ? selectedExistingCard.issuer : issuerInput,
+      cardName: sameIssuer ? selectedExistingCard.name : typedCardName,
       sourceUrl: document.getElementById("discover-source-url")?.value.trim() || "",
       cardId: cardSelect.value || null
     };

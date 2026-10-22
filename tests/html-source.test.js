@@ -42,3 +42,29 @@ test("keeps same-issuer links only and safely decodes URL entities", () => {
   assert.ok(result.relatedUrls.some(link => link.url === "https://www.hdfc.bank.in/terms?type=fees&doc=card"));
   assert.ok(!result.relatedUrls.some(link => link.url.includes("evil.example")));
 });
+
+
+test("scopes a multi-card issuer catalogue to the exact selected card heading", () => {
+  const html = '<html><head><title>Credit Cards | YES BANK</title></head><body><main>' +
+    '<section><article><h3>UNI Credit Card</h3>' +
+    '<p>Joining Fees 0. Renewal Fees ₹499.</p>' +
+    '<p>1% cash back in Uni Coins on all transactions.</p>' +
+    '<p>0% foreign currency conversion charges for international transactions.</p>' +
+    '<p>1% fuel surcharge waiver on fuel transactions.</p></article>' +
+    '<article><h3>UNI Rupay Credit Card</h3>' +
+    '<p>Joining Fees 0. Renewal Fees ₹0.</p>' +
+    '<p>Different rewards and eligibility conditions for this other variant.</p></article>' +
+    '<article><h3>Zagg Credit Card</h3><p>Two domestic lounge visits subject to spend eligibility.</p></article>' +
+    '</section></main></body></html>';
+  const result = extractOfficialHtml(
+    html,
+    "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/",
+    "UNI Credit Card"
+  );
+
+  assert.equal(result.focusedCardSection, "UNI Credit Card");
+  assert.match(result.text, /Renewal Fees ₹499/);
+  assert.match(result.text, /1% cash back in Uni Coins/);
+  assert.match(result.text, /0% foreign currency conversion charges/);
+  assert.doesNotMatch(result.text, /UNI Rupay Credit Card|Zagg Credit Card|Different rewards/);
+});
