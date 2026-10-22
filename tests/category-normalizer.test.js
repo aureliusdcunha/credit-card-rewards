@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CATEGORIES, normalizeCategory, normalizeDraftCategories } from "../src/category-normalizer.js";
+import { CATEGORIES, normalizeCategory, normalizeDraftCategories, explicitPerAmountFromQuote } from "../src/category-normalizer.js";
 
 test("normalizes common reward category labels to canonical categories", () => {
   assert.equal(normalizeCategory("flights"), "airline_direct");
@@ -42,4 +42,45 @@ test("normalizes exclusion categories but retains a reviewer warning", () => {
 
 test("does not hide unsupported labels by coercing them to unrelated categories", () => {
   assert.equal(normalizeCategory("subscription streaming"), "subscription streaming");
+});
+
+
+test("recovers a zero perAmount only when the source quote explicitly states a spend denominator", () => {
+  assert.equal(explicitPerAmountFromQuote("Earn 5 EDGE Miles for every INR 100 spent on eligible transactions."), 100);
+  assert.equal(explicitPerAmountFromQuote("Earn 3 reward points per ₹1,000 spent."), 1000);
+  assert.equal(explicitPerAmountFromQuote("Earn 4 points on every 500 INR spent."), 500);
+  assert.equal(explicitPerAmountFromQuote("Flights earn bonus EDGE Miles."), null);
+});
+
+test("repairs perAmount from a quote and annotates the draft for human review", () => {
+  const draft = {
+    rules: [{
+      category: "airline_direct",
+      rate: 5,
+      perAmount: 0,
+      unit: "EDGE Miles",
+      sourceQuote: "5 EDGE Miles for every INR 100 spent on airline purchases.",
+      notes: null
+    }],
+    exclusions: []
+  };
+  normalizeDraftCategories(draft);
+  assert.equal(draft.rules[0].perAmount, 100);
+  assert.match(draft.rules[0].notes, /perAmount was set to 100/i);
+});
+
+test("does not invent a denominator when the source quote has no explicit spend basis", () => {
+  const draft = {
+    rules: [{
+      category: "general",
+      rate: 5,
+      perAmount: 0,
+      unit: "EDGE Miles",
+      sourceQuote: "Earn bonus EDGE Miles on eligible purchases.",
+      notes: null
+    }],
+    exclusions: []
+  };
+  normalizeDraftCategories(draft);
+  assert.equal(draft.rules[0].perAmount, 0);
 });
