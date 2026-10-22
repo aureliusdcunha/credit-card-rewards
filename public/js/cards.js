@@ -69,6 +69,19 @@
       closeCardModal();
       return;
     }
+    if (event.key === "Tab") {
+      const focusable = [...modal.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')];
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+      return;
+    }
     if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && event.target?.matches?.("[data-modal-tab]")) {
       event.preventDefault();
       const currentIndex = modalTabs.indexOf(event.target);
