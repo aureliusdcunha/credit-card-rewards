@@ -99,7 +99,7 @@ function metaDescription(html) {
 }
 
 function normalizeHeading(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\\s+/g, " ");
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
 function focusCardSection(html, cardName) {
@@ -107,7 +107,7 @@ function focusCardSection(html, cardName) {
   if (!target) return null;
   const targetTokens = target.split(" ").filter(Boolean);
   const cleanHtml = String(html || "").replace(OMIT_COMMENTS, " ").replace(OMIT_BLOCKS, " ");
-  const headings = [...cleanHtml.matchAll(/<h([1-6])\\b[^>]*>([\\s\\S]*?)<\\/h\\1\\s*>/gi)].map(match => {
+  const headings = [...cleanHtml.matchAll(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi)].map(match => {
     const heading = textFromMarkup(match[2]);
     const normalized = normalizeHeading(heading);
     const tokens = normalized.split(" ").filter(Boolean);
