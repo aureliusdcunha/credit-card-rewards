@@ -478,3 +478,76 @@ test("does not create accelerated SimplySAVE rules if the monthly cap cannot be 
   assert.ok(draft.benefits.some(item => /accelerated.*needs complete verification/i.test(item.name)));
   assert.match(draft.missingItems.join(" "), /monthly cap/i);
 });
+
+
+test("parses HDFC Regalia Gold combined joining/renewal membership fee as ₹2,500 each", () => {
+  const cardPage = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Regalia Gold Credit Card",
+    "URL: " + cardPage,
+    "SOURCE TEXT START",
+    "Fees & Charges",
+    "Joining/ Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
+    "You can get Renewal Fee waived for next renewal on spends of ₹4 Lakhs.",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    joiningFee: null,
+    annualFee: null,
+    annualFeeWaiver: "Get Renewal Fee waived for next renewal on spends of ₹4 Lakhs.",
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, {
+    issuer: draft.issuer,
+    cardName: draft.cardName,
+    sourceText,
+    sourceUrl: cardPage
+  });
+
+  assert.equal(draft.joiningFee, 2500);
+  assert.equal(draft.annualFee, 2500);
+  assert.match(draft.annualFeeWaiver, /₹4,00,000|4 Lakhs/i);
+  const feeBenefit = draft.benefits.find(item => item.name === "Joining and annual fee");
+  assert.ok(feeBenefit);
+  assert.match(feeBenefit.description, /Joining fee: ₹2,500 plus applicable taxes/i);
+  assert.match(feeBenefit.description, /Annual\/renewal fee: ₹2,500 plus applicable taxes/i);
+  assert.match(feeBenefit.sourceQuote, /Joining\/ Renewal Membership Fee of Rs\. 2500 \+ Applicable Taxes/i);
+  assert.equal(feeBenefit.sourceUrl, cardPage);
+});
+
+test("official combined fee wording overrides model-produced zero values", () => {
+  const cardPage = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Regalia Gold Credit Card",
+    "URL: " + cardPage,
+    "SOURCE TEXT START",
+    "Joining/ Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    joiningFee: 0,
+    annualFee: 0,
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+  normalizeCommonCardFacts(draft, {
+    issuer: draft.issuer,
+    cardName: draft.cardName,
+    sourceText,
+    sourceUrl: cardPage
+  });
+  assert.equal(draft.joiningFee, 2500);
+  assert.equal(draft.annualFee, 2500);
+});

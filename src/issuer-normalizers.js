@@ -208,6 +208,31 @@ function officialClauses(sections) {
 }
 
 
+function combinedMembershipFeeFact(sections) {
+  const pattern = /\bjoining\s*\/\s*(?:renewal|annual)\s+(?:membership\s+)?fee\s*(?:(?:is|of)\s*)?(?:[:\-]\s*)?(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)(?:\s*(?:\+|plus)\s*(?:applicable\s*)?tax(?:es)?)?/i;
+  for (const section of sections) {
+    const match = pattern.exec(String(section.text || ""));
+    if (!match) continue;
+    const amount = Number(match[1].replace(/,/g, ""));
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    let quote = quoteForMatch(section.text, match);
+    const tail = String(section.text || "").slice(match.index + match[0].length);
+    const taxSuffix = tail.match(/^\s*(?:\+|plus)\s*(?:applicable\s*)?tax(?:es)?/i)?.[0] || "";
+    if (taxSuffix && !/(?:\+|plus)\s*(?:applicable\s*)?tax(?:es)?/i.test(quote)) {
+      quote = (quote + " " + taxSuffix).replace(/\s+/g, " ").trim();
+    }
+    return {
+      amount,
+      explicitZero: amount === 0,
+      taxesApplicable: /(?:\+|plus)\s*(?:applicable\s*)?tax(?:es)?/i.test(quote),
+      quote,
+      url: section.url || null,
+      title: section.title || null
+    };
+  }
+  return null;
+}
+
 function explicitFeeFact(clauses, feeKind) {
   const isJoining = feeKind === "joining";
   const label = isJoining ? /\bjoining fee\b/i : /\b(?:annual|renewal|membership) fee\b/i;
@@ -360,8 +385,19 @@ export function normalizeCommonCardFacts(data, context = {}) {
   }
 
   const clauses = officialClauses(sections);
-  const joiningFact = explicitFeeFact(clauses, "joining");
-  const annualFact = explicitFeeFact(clauses, "annual");
+  const combinedMembershipFact = combinedMembershipFeeFact(sections);
+  const parsedJoiningFact = explicitFeeFact(clauses, "joining");
+  const parsedAnnualFact = explicitFeeFact(clauses, "annual");
+  // HDFC Regalia Gold and some other issuer pages state a single
+  // "Joining/Renewal Membership Fee of Rs. 2500 + Applicable Taxes" line.
+  // That one explicit statement applies to both the joining fee and renewal fee.
+  // Prefer this official combined fact over an AI-produced null or zero.
+  const joiningFact = combinedMembershipFact
+    ? { ...combinedMembershipFact, label: "Joining fee" }
+    : parsedJoiningFact;
+  const annualFact = combinedMembershipFact
+    ? { ...combinedMembershipFact, label: "Annual/renewal fee" }
+    : parsedAnnualFact;
   const waiverFact = findWaiverFact(clauses);
 
   if (joiningFact) data.joiningFee = joiningFact.amount;
@@ -375,7 +411,7 @@ export function normalizeCommonCardFacts(data, context = {}) {
     ].filter(Boolean);
     const description = facts.map(({ label, fact }) =>
       label + ": " + (fact.amount === 0 ? "₹0" : "₹" + fact.amount.toLocaleString("en-IN")) +
-      (/\b(?:plus|\+)\s*(?:applicable\s*)?tax(?:es)?\b/i.test(fact.quote) ? " plus applicable taxes" : "")
+      ((fact.taxesApplicable || /\b(?:plus|\+)\s*(?:applicable\s*)?tax(?:es)?\b/i.test(fact.quote)) ? " plus applicable taxes" : "")
     ).join(". ") + ".";
     const quote = facts.map(item => item.fact.quote).join(" ");
     genericUpsertBenefit(data, {
