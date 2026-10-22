@@ -34,6 +34,13 @@
       return value;
     } catch (error) { throw new Error(`Review JSON is invalid: ${error.message}`); }
   }
+  function updatePublishButtonLabel() {
+    const button = document.getElementById("approve-draft");
+    if (!button || !currentDraftId || (button.disabled && button.textContent === "Publishing…")) return;
+    button.textContent = (cardSelect.value || currentCardId)
+      ? "Publish reviewed rules"
+      : "Create card & publish reviewed rules";
+  }
   function openDraft(draft) {
     currentDraftId = draft.id;
     currentSourceUrl = draft.sourceUrl || "";
@@ -48,7 +55,7 @@
     draftJson.value = JSON.stringify(parsed, null, 2);
     draftJson.readOnly = false;
     document.getElementById("approve-draft").disabled = false;
-    document.getElementById("approve-draft").textContent = "Publish reviewed rules";
+    updatePublishButtonLabel();
     document.getElementById("reject-draft").disabled = false;
     const statusPill = document.getElementById("draft-status-pill");
     const draftStatus = String(draft.status || "needs_review").toLowerCase();
@@ -108,6 +115,7 @@
     draftList.innerHTML = '<div class="empty-state"><h3>Admin token required</h3><p>Enter the token to view saved drafts.</p></div>';
   });
   document.getElementById("refresh-drafts").addEventListener("click", refreshDrafts);
+  cardSelect.addEventListener("change", updatePublishButtonLabel);
 
   discoverForm.addEventListener("submit", async event => {
     event.preventDefault();
@@ -199,7 +207,9 @@
       const response = await C.request(`/admin/drafts/${encodeURIComponent(draftIdBeingPublished)}/approve`, { method: "POST", body: JSON.stringify({ approvedJson, cardId }) });
       published = true;
       currentDraftId = null;
-      reviewMessage.textContent = `Published successfully to card ${response.cardId}. This draft is now approved and removed from pending review. Previous rules were retained as retired history.`;
+        reviewMessage.textContent = response.createdNewCard
+          ? `Created new card ${response.cardId} and published the reviewed rules. The card is now in the catalogue.`
+          : `Published successfully to card ${response.cardId}. This draft is now approved and removed from pending review. Previous rules were retained as retired history.`;
       successBox.textContent = response.message;
       const status = document.getElementById("draft-status");
       if (status) status.textContent = "approved";
@@ -218,7 +228,7 @@
     } finally {
       if (!published) {
         button.disabled = false;
-        button.textContent = "Publish reviewed rules";
+        updatePublishButtonLabel();
       }
     }
   });
