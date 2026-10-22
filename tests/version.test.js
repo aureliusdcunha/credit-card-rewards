@@ -81,7 +81,7 @@ test("package version, every page cache-buster, all page footers and the visible
   for (const page of htmlPages) {
     const html = await readFile(new URL("../public/" + page, import.meta.url), "utf8");
     assert.ok(html.includes("v" + APP_VERSION + " · build " + APP_BUILD), page + " footer must match the current release");
-    for (const match of html.matchAll(/\\?v=([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)/g)) {
+    for (const match of html.matchAll(/\?v=([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/g)) {
       assert.equal(match[1], APP_VERSION + ".0", page + " asset cache-busters must match the current release");
     }
   }
