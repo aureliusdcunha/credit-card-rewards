@@ -46,7 +46,11 @@
     try { parsed = typeof draft.extractedJson === "string" ? JSON.parse(draft.extractedJson) : draft.extractedJson; }
     catch { parsed = draft.extractedJson; }
     draftJson.value = JSON.stringify(parsed, null, 2);
-    draftMeta.innerHTML = `<div><strong>Draft ID:</strong> ${C.escapeHtml(draft.id)}</div><div><strong>Source:</strong> <a href="${C.escapeHtml(currentSourceUrl)}" target="_blank" rel="noopener noreferrer">${C.escapeHtml(currentSourceTitle)} ↗</a></div><div><strong>Created:</strong> ${C.escapeHtml(draft.createdAt || "Not available")} · <strong>Status:</strong> ${C.escapeHtml(draft.status || "needs_review")}</div>${draft.sourceExcerpt ? `<details><summary>Show source excerpt</summary><p>${C.escapeHtml(draft.sourceExcerpt)}</p></details>` : ""}`;
+    draftJson.readOnly = false;
+    document.getElementById("approve-draft").disabled = false;
+    document.getElementById("approve-draft").textContent = "Publish reviewed rules";
+    document.getElementById("reject-draft").disabled = false;
+    draftMeta.innerHTML = `<div><strong>Draft ID:</strong> ${C.escapeHtml(draft.id)}</div><div><strong>Source:</strong> <a href="${C.escapeHtml(currentSourceUrl)}" target="_blank" rel="noopener noreferrer">${C.escapeHtml(currentSourceTitle)} ↗</a></div><div><strong>Created:</strong> ${C.escapeHtml(draft.createdAt || "Not available")} · <strong>Status:</strong> <span id="draft-status">${C.escapeHtml(draft.status || "needs_review")}</span></div>${draft.sourceExcerpt ? `<details><summary>Show source excerpt</summary><p>${C.escapeHtml(draft.sourceExcerpt)}</p></details>` : ""}`;
     reviewMessage.textContent = "Review all rates, source quotes, exclusions and effective dates. Publishing will affect calculations for this card.";
     draftPanel.hidden = false;
     draftPanel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -172,17 +176,33 @@
     let approvedJson;
     try { approvedJson = parseEditorJson(); }
     catch (error) { reviewMessage.textContent = error.message; return; }
+    const draftIdBeingPublished = currentDraftId;
     const cardId = cardSelect.value || currentCardId || null;
     const button = document.getElementById("approve-draft");
+    let published = false;
     button.disabled = true; button.textContent = "Publishing…";
     try {
-      const response = await C.request(`/admin/drafts/${encodeURIComponent(currentDraftId)}/approve`, { method: "POST", body: JSON.stringify({ approvedJson, cardId }) });
-      reviewMessage.textContent = `Published successfully to card ${response.cardId}. Previous rules were retained as retired history.`;
-      successBox.textContent = response.message;
-      await loadCards(); await refreshDrafts();
+      const response = await C.request(`/admin/drafts/${encodeURIComponent(draftIdBeingPublished)}/approve`, { method: "POST", body: JSON.stringify({ approvedJson, cardId }) });
+      published = true;
       currentDraftId = null;
-    } catch (error) { reviewMessage.textContent = error.message; }
-    finally { button.disabled = false; button.textContent = "Publish reviewed rules"; }
+      reviewMessage.textContent = `Published successfully to card ${response.cardId}. This draft is now approved and removed from pending review. Previous rules were retained as retired history.`;
+      successBox.textContent = response.message;
+      const status = document.getElementById("draft-status");
+      if (status) status.textContent = "approved";
+      draftJson.readOnly = true;
+      document.getElementById("reject-draft").disabled = true;
+      button.textContent = "Published";
+      button.disabled = true;
+      await loadCards();
+      await refreshDrafts();
+    } catch (error) {
+      reviewMessage.textContent = error.message;
+    } finally {
+      if (!published) {
+        button.disabled = false;
+        button.textContent = "Publish reviewed rules";
+      }
+    }
   });
   document.getElementById("reject-draft").addEventListener("click", async () => {
     if (!currentDraftId) return;

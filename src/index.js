@@ -336,8 +336,8 @@ async function approveDraft(request, env, draftId) {
   try { body = await request.json(); } catch { return json({ error: "Request body must be JSON." }, 400); }
   let approved;
   try { approved = validateApprovedData(body.approvedJson); } catch (error) { return json({ error: error.message }, 400); }
-  const draftRow = await env.DB.prepare("SELECT * FROM extraction_drafts WHERE id = ?").bind(draftId).first();
-  if (!draftRow) return json({ error: "Draft not found. It may have been created in local demo mode and not persisted." }, 404);
+  const draftRow = await env.DB.prepare("SELECT * FROM extraction_drafts WHERE id = ? AND status = 'needs_review'").bind(draftId).first();
+  if (!draftRow) return json({ error: "Pending draft not found. It may not be persisted, or it may already have been approved or rejected." }, 404);
   if (!draftRow.source_url) return json({ error: "A source URL is required before publishing a card rule." }, 400);
   try { validateOfficialUrl(draftRow.source_url); } catch (error) { return json({ error: error.message }, 400); }
 
