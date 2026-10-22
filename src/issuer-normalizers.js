@@ -305,7 +305,7 @@ function extractExplicitCardNetwork(sections) {
   const cues = [
     /\b(?:card|payment)\s+network\b/i,
     /\bnetwork\s+(?:type|variant)\b/i,
-    /\b(?:available|issued|offered)\s+(?:on|through|in)\b/i,
+    /\b(?:available|issued|offered)\s+(?:on|through|in|as)\s+(?:the\s+)?(?:visa|master\s*card|rupay|american\s+express|amex|diners?\s+club)\b/i,
     /\b(?:choose|select)\s+(?:your|a)\s+(?:card\s+)?network\b/i,
     /\b(?:visa|master\s*card|rupay|american\s+express|amex|diners?\s+club)\b.{0,30}\bnetwork\b/i
   ];
