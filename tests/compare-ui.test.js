@@ -14,7 +14,7 @@ test("Compare page has separate accessible Reward points and Benefits tabs", asy
   assert.ok(html.includes('aria-controls="compare-panel-points"'));
   assert.ok(html.includes('aria-controls="compare-panel-benefits"'));
   assert.ok(html.includes('id="compare-panel-points"'));
-  assert.ok(html.includes('id="compare-panel-benefits" hidden'));
+  assert.match(html, /<section id="compare-panel-benefits"[^>]*hidden>/);
   assert.ok(js.includes('const MAX_COMPARE = 5'));
   assert.ok(js.includes('function setActiveTab(which)'));
   assert.ok(js.includes('pointsTab.addEventListener("click"'));
