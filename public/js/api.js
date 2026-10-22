@@ -35,13 +35,14 @@
     const rules = Array.isArray(card.rules) ? card.rules : [];
     const verifiedRules = rules.filter(rule => rule.status === "approved").length;
     const ruleCount = rules.length;
+    const benefitCount = Array.isArray(card.benefits) ? card.benefits.length : 0;
     const statusText = card.reviewStatus === "verified" && verifiedRules ? "verified" : card.reviewStatus;
     return `<article class="credit-card-tile" data-card-id="${escapeHtml(card.id)}">
       <div class="tile-top"><div class="bank-icon ${bankClass(card.issuer)}">${escapeHtml(initials(card.issuer))}</div>${statusPill(statusText)}</div>
       <div class="tile-bank">${escapeHtml(card.issuer)}</div><h3 class="tile-title">${escapeHtml(card.name)}</h3>
       <p class="tile-desc">${escapeHtml(card.description || "Issuer card details awaiting review.")}</p>
-      <div class="tile-meta"><div><div class="meta-label">Reward currency</div><div class="meta-value">${escapeHtml(card.rewardCurrency || "Rewards")}</div></div><div><div class="meta-label">Rules available</div><div class="meta-value">${ruleCount ? `${ruleCount} total · ${verifiedRules} verified` : "Awaiting extraction"}</div></div></div>
-      <div class="tile-bottom"><span class="source-indicator ${card.reviewStatus === "verified" ? "verified" : ""}">${card.reviewStatus === "verified" ? "Official rules reviewed" : "Source needs review"}</span><button class="text-link view-rules-button" type="button" data-card-id="${escapeHtml(card.id)}">${compact ? "View card" : "View rules ↗"}</button></div>
+      <div class="tile-meta"><div><div class="meta-label">Reward currency</div><div class="meta-value">${escapeHtml(card.rewardCurrency || "Rewards")}</div></div><div><div class="meta-label">Rules & benefits</div><div class="meta-value">${ruleCount ? `${ruleCount} rules · ${verifiedRules} verified` : "No rules yet"} · ${benefitCount} benefits</div></div></div>
+      <div class="tile-bottom"><span class="source-indicator ${card.reviewStatus === "verified" ? "verified" : ""}">${card.reviewStatus === "verified" ? "Official rules reviewed" : "Source needs review"}</span><button class="text-link view-rules-button" type="button" data-card-id="${escapeHtml(card.id)}">${compact ? "View card" : "View benefits & rules ↗"}</button></div>
       <div class="card-expanded" id="expanded-${escapeHtml(card.id)}" hidden></div>
     </article>`;
   }
