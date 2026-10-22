@@ -1,6 +1,7 @@
 import { getCards, getDrafts } from "./db.js";
 import { calculateRewards } from "./rules-engine.js";
 import { discoverOfficialUrls } from "./source-discovery.js";
+import { normalizeDraftRewardUnits } from "./reward-units.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
 import { deduplicatePendingDraftRows, draftIdentity, sameCardIdentity, normalizeIdentityPartForCompare, normalizeSourceUrl } from "./draft-dedupe.js";
 
@@ -142,6 +143,7 @@ function parseAndValidateDraft(input) {
   if (!Array.isArray(data.missingItems)) data.missingItems = [];
   if (data.rules.length > 100 || data.exclusions.length > 150) throw new Error("The extracted draft contains too many rules. Split the source into smaller sections.");
   normalizeDraftCategories(data);
+  normalizeDraftRewardUnits(data);
   return sanitizeIncompleteEarningRules(data);
 }
 function makeSlug(value) {
@@ -152,6 +154,7 @@ function validateApprovedData(data) {
   if (!String(data.issuer || "").trim() || !String(data.cardName || "").trim()) throw new Error("Issuer and cardName are required before publishing.");
   if (!Array.isArray(data.rules) || !Array.isArray(data.exclusions)) throw new Error("The approved JSON must include rules and exclusions arrays.");
   normalizeDraftCategories(data);
+  normalizeDraftRewardUnits(data);
   sanitizeIncompleteEarningRules(data);
   if (data.rules.length === 0) throw new Error("No complete earning rules remain after validation. At least one rule needs a numeric reward rate, a positive perAmount spend basis, a reward unit, and a traceable sourceQuote. The incomplete claims were retained as benefits/missingItems; use the current official card terms to add a complete rule before publishing.");
   if (data.benefits.length > 150) throw new Error("Too many benefits in one draft. Split the source into smaller sections.");

@@ -191,3 +191,92 @@ test("explains when all approved rules expired before the selected transaction d
   assert.match(result.explanation, /rules expired \(2025-12-31\)/i);
   assert.equal(result.lastExpiredDate, "2025-12-31");
 });
+
+
+test("uses Regalia Gold's explicit base retail rate for Dining and calculates 625 points on ₹25,000", () => {
+  const card = {
+    id: "hdfc-regalia-gold",
+    name: "Regalia Gold",
+    issuer: "HDFC Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [
+      {
+        category: "online_shopping",
+        rate: 5,
+        perAmount: 200,
+        unit: "Reward Points",
+        status: "approved",
+        validFrom: "2026-05-15",
+        sourceQuote: "5 Reward Points on every Rs. 200 spent (On retail spends)"
+      },
+      {
+        category: "online_shopping",
+        rate: 5,
+        perAmount: 200,
+        unit: "Reward Points",
+        status: "approved",
+        validFrom: "2026-05-15",
+        sourceQuote: "5X Reward Points on spends at select brands including Myntra and Nykaa"
+      }
+    ],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.ok, true);
+  assert.equal(result.unavailable, undefined);
+  assert.equal(result.points, 625);
+  assert.equal(result.rate, 5);
+  assert.equal(result.perAmount, 200);
+  assert.equal(result.rewardUnit, "Reward Points");
+  assert.match(result.notes.join(" "), /base rate explicitly quoted for retail spends/i);
+  assert.match(result.explanation, /base retail-spend fallback/i);
+  assert.equal(result.sourceQuote, "5 Reward Points on every Rs. 200 spent (On retail spends)");
+});
+
+test("does not treat an accelerated retail-brand rate as a general retail fallback", () => {
+  const card = {
+    id: "hdfc-accelerated-only",
+    name: "Regalia Gold",
+    issuer: "HDFC Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [{
+      category: "online_shopping",
+      rate: 5,
+      perAmount: 200,
+      unit: "Reward Points",
+      status: "approved",
+      sourceQuote: "5X Reward Points on spends at select brands including Myntra and Nykaa"
+    }],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.unavailable, true);
+});
+
+
+test("corrects a spend-currency unit label to the card reward currency in an Axis comparison", () => {
+  const card = {
+    id: "axis-horizon",
+    name: "Horizon Credit Card",
+    issuer: "Axis Bank",
+    rewardCurrency: "EDGE Miles",
+    reviewStatus: "verified",
+    rules: [{
+      category: "other",
+      rate: 2,
+      perAmount: 100,
+      unit: "INR",
+      status: "approved",
+      sourceQuote: "2 EDGE Miles per ₹100 on other eligible spend."
+    }],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-22" });
+  assert.equal(result.ok, true);
+  assert.equal(result.points, 500);
+  assert.equal(result.rewardUnit, "EDGE Miles");
+  assert.match(result.explanation, /2 EDGE Miles per ₹100/i);
+  assert.match(result.notes.join(" "), /other eligible spend.*fallback/i);
+});

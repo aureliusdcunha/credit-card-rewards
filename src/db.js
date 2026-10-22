@@ -1,4 +1,5 @@
 import { DEMO_CARDS } from "./demo-data.js";
+import { normalizeRewardUnit } from "./reward-units.js";
 import { deduplicatePendingDraftRows } from "./draft-dedupe.js";
 
 function fromDbCard(row) {
@@ -36,6 +37,12 @@ export async function getCards(env) {
       if (!card) continue;
       try {
         const rule = JSON.parse(row.rule_json);
+        const originalUnit = String(rule.unit || "").trim();
+        const normalizedUnit = normalizeRewardUnit(originalUnit, card.rewardCurrency);
+        if (normalizedUnit && normalizedUnit !== originalUnit) {
+          rule.unit = normalizedUnit;
+          rule.notes = [String(rule.notes || "").trim(), `The stored unit "${originalUnit}" looked like the spend currency; displayed as the card's reward currency "${normalizedUnit}". Confirm the original source quote.`].filter(Boolean).join(" ");
+        }
         card.rules.push({ id: row.id, ...rule, status: row.status, validFrom: row.valid_from, validTo: row.valid_to, sourceId: row.source_id || null });
       } catch { /* malformed rows are ignored; admin can repair their source draft */ }
     }
