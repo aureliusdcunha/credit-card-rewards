@@ -1,0 +1,172 @@
+(() => {
+  const C = window.CRI;
+  const escape = value => C.escapeHtml(value == null ? "" : value);
+  const sourceLink = (item, card) => {
+    const url = item && item.sourceUrl ? item.sourceUrl : card.officialUrl;
+    return url
+      ? '<a class="text-link modal-source-link" href="' + escape(url) + '" target="_blank" rel="noopener noreferrer">Open supporting issuer source ↗</a>'
+      : '<span class="modal-source-missing">Supporting source link not recorded</span>';
+  };
+  const validity = item => {
+    const parts = [];
+    if (item.validFrom) parts.push("From " + item.validFrom);
+    if (item.validTo) parts.push("Until " + item.validTo);
+    return parts.join(" · ");
+  };
+  const sectionIntro = (text, count) =>
+    '<div class="modal-section-intro"><p>' + escape(text) + '</p><span>' + count + '</span></div>';
+  const emptyState = (title, body) =>
+    '<div class="modal-empty"><strong>' + escape(title) + '</strong><p>' + escape(body) + '</p></div>';
+
+  function renderBenefits(card) {
+    const benefits = Array.isArray(card.benefits) ? card.benefits : [];
+    let html = sectionIntro("Perks and services recorded from the issuer terms.", benefits.length + " benefit(s)");
+    if (!benefits.length) {
+      return html + emptyState("No benefits recorded yet", "Run source extraction and review the issuer quotations to add welcome, lounge, travel, dining, milestone and other card benefits.");
+    }
+    html += '<div class="modal-item-list">';
+    html += benefits.map(benefit => {
+      const dates = validity(benefit);
+      return '<article class="modal-info-item">' +
+        '<div class="modal-info-item-top"><h3>' + escape(benefit.name || "Card benefit") + '</h3>' +
+        (benefit.status ? C.statusPill(benefit.status) : '') + '</div>' +
+        '<p>' + escape(benefit.description || "No description supplied.") + '</p>' +
+        (benefit.conditions ? '<div class="modal-detail-line"><strong>Eligibility / conditions</strong><span>' + escape(benefit.conditions) + '</span></div>' : '') +
+        (benefit.sourceQuote ? '<blockquote class="modal-source-quote"><strong>Issuer quote</strong><br>“' + escape(benefit.sourceQuote) + '”</blockquote>' : '') +
+        (dates ? '<div class="modal-detail-line"><strong>Validity</strong><span>' + escape(dates) + '</span></div>' : '') +
+        sourceLink(benefit, card) +
+        '</article>';
+    }).join("");
+    return html + '</div>';
+  }
+
+  function renderRules(card) {
+    const rules = Array.isArray(card.rules) ? card.rules : [];
+    let html = sectionIntro("Earning rates approved for the selected card.", rules.length + " rule(s)");
+    if (!rules.length) {
+      return html + emptyState("No reward rules available", "The card has no published earning rules. Import current official terms, review the rates and source quotes, then publish the rules.");
+    }
+    html += '<div class="modal-item-list">';
+    html += rules.map(rule => {
+      const dates = validity(rule);
+      const cap = rule.cap && typeof rule.cap === "object"
+        ? (rule.cap.type === "spend" ? C.formatINR(rule.cap.value) : C.formatNumber(rule.cap.value) + " " + (rule.unit || card.rewardCurrency || "rewards")) +
+          (rule.cap.period ? " per " + String(rule.cap.period).replace(/_/g, " ") : "") +
+          (rule.cap.overCapCategory ? "; then " + String(rule.cap.overCapCategory).replace(/_/g, " ") : "")
+        : "";
+      const minimum = rule.minTransaction != null && Number.isFinite(Number(rule.minTransaction)) && Number(rule.minTransaction) > 0
+        ? C.formatINR(rule.minTransaction)
+        : "";
+      return '<article class="modal-info-item">' +
+        '<div class="modal-info-item-top"><h3>' + escape(C.prettyCategory(rule.category)) + '</h3>' +
+        C.statusPill(rule.status) + '</div>' +
+        '<div class="modal-rate-line"><strong>' + escape(C.formatNumber(rule.rate)) + ' ' + escape(rule.unit || card.rewardCurrency || "rewards") + '</strong><span>per ' + escape(C.formatINR(rule.perAmount)) + '</span></div>' +
+        (minimum ? '<div class="modal-detail-line"><strong>Minimum transaction</strong><span>' + escape(minimum) + '</span></div>' : '') +
+        (cap ? '<div class="modal-detail-line"><strong>Cap / limit</strong><span>' + escape(cap) + '</span></div>' : '') +
+        (rule.rounding ? '<div class="modal-detail-line"><strong>Rounding</strong><span>' + escape(rule.rounding) + '</span></div>' : '') +
+        (rule.notes ? '<p class="modal-rule-notes">' + escape(rule.notes) + '</p>' : '') +
+        (rule.sourceQuote ? '<blockquote class="modal-source-quote"><strong>Issuer quote</strong><br>“' + escape(rule.sourceQuote) + '”</blockquote>' : '') +
+        (dates ? '<div class="modal-detail-line"><strong>Validity</strong><span>' + escape(dates) + '</span></div>' : '') +
+        sourceLink(rule, card) +
+        '</article>';
+    }).join("");
+    return html + '</div>';
+  }
+
+  function renderRestrictions(card) {
+    const exclusions = Array.isArray(card.exclusions) ? card.exclusions : [];
+    const rules = Array.isArray(card.rules) ? card.rules : [];
+    const conditionalRules = rules.filter(rule =>
+      rule.notes || rule.minTransaction != null || rule.cap || rule.validFrom || rule.validTo
+    );
+    let html = sectionIntro("Excluded spend types and conditions that can affect eligibility.", exclusions.length + " exclusion(s)");
+    if (!exclusions.length) {
+      html += emptyState("No exclusions recorded", "This does not mean the issuer has no exclusions. Confirm excluded merchant categories, MCCs, transaction types and other limitations in the current terms.");
+    } else {
+      html += '<div class="modal-item-list">';
+      html += exclusions.map(exclusion => {
+        const dates = validity(exclusion);
+        const mcc = Array.isArray(exclusion.mccCodes) && exclusion.mccCodes.length
+          ? exclusion.mccCodes.join(", ")
+          : "";
+        return '<article class="modal-info-item">' +
+          '<div class="modal-info-item-top"><h3>' + escape(C.prettyCategory(exclusion.category || "all")) + '</h3>' +
+          (exclusion.status ? C.statusPill(exclusion.status) : '') + '</div>' +
+          '<p>' + escape(exclusion.reason || "Exclusion reason not supplied.") + '</p>' +
+          (mcc ? '<div class="modal-detail-line"><strong>MCC codes</strong><span>' + escape(mcc) + '</span></div>' : '') +
+          (exclusion.sourceQuote ? '<blockquote class="modal-source-quote"><strong>Issuer quote</strong><br>“' + escape(exclusion.sourceQuote) + '”</blockquote>' : '') +
+          (dates ? '<div class="modal-detail-line"><strong>Validity</strong><span>' + escape(dates) + '</span></div>' : '') +
+          sourceLink(exclusion, card) +
+          '</article>';
+      }).join("");
+      html += '</div>';
+    }
+
+    html += '<h3 class="modal-subsection-title">Rule-specific conditions</h3>';
+    if (!conditionalRules.length) {
+      html += '<p class="modal-muted-note">No minimums, caps, validity windows or rule notes are recorded. Check the issuer terms for conditions not yet entered.</p>';
+    } else {
+      html += '<div class="modal-item-list">';
+      html += conditionalRules.map(rule => {
+        const dates = validity(rule);
+        const cap = rule.cap && typeof rule.cap === "object"
+          ? (rule.cap.type === "spend" ? C.formatINR(rule.cap.value) : C.formatNumber(rule.cap.value) + " " + (rule.unit || card.rewardCurrency || "rewards")) +
+            (rule.cap.period ? " per " + String(rule.cap.period).replace(/_/g, " ") : "")
+          : "";
+        return '<article class="modal-info-item modal-compact-item">' +
+          '<h3>' + escape(C.prettyCategory(rule.category)) + '</h3>' +
+          (rule.notes ? '<p>' + escape(rule.notes) + '</p>' : '') +
+          (rule.minTransaction != null && Number(rule.minTransaction) > 0 ? '<div class="modal-detail-line"><strong>Minimum transaction</strong><span>' + escape(C.formatINR(rule.minTransaction)) + '</span></div>' : '') +
+          (cap ? '<div class="modal-detail-line"><strong>Cap / limit</strong><span>' + escape(cap) + '</span></div>' : '') +
+          (dates ? '<div class="modal-detail-line"><strong>Validity</strong><span>' + escape(dates) + '</span></div>' : '') +
+          sourceLink(rule, card) +
+          '</article>';
+      }).join("");
+      html += '</div>';
+    }
+    return html;
+  }
+
+  function renderFees(card) {
+    const benefits = Array.isArray(card.benefits) ? card.benefits : [];
+    const feeBenefits = benefits.filter(benefit =>
+      /\b(?:fee|fees|waiv|joining|renewal|charge|markup|finance charge|late payment|foreign currency|forex)\b/i
+        .test([benefit.name, benefit.description, benefit.conditions, benefit.sourceQuote].filter(Boolean).join(" "))
+    );
+    let html = sectionIntro("Fees and waiver terms recorded for this card.", "Fee summary");
+    html += '<div class="modal-fee-grid">' +
+      '<article class="modal-fee-card"><span>Annual fee</span><strong>' + escape(C.formatINR(card.annualFee)) + '</strong></article>' +
+      '<article class="modal-fee-card"><span>Joining fee</span><strong>Not separately recorded</strong></article>' +
+      '</div>';
+    html += '<article class="modal-info-item modal-fee-waiver"><h3>Annual fee waiver</h3>' +
+      (card.annualFeeWaiver ? '<p>' + escape(card.annualFeeWaiver) + '</p>' : '<p>No annual-fee waiver details have been recorded. Check the official terms.</p>') +
+      sourceLink({ sourceUrl: card.officialUrl }, card) + '</article>';
+    html += '<h3 class="modal-subsection-title">Other fee-related terms</h3>';
+    if (!feeBenefits.length) {
+      html += '<p class="modal-muted-note">No other fee-related details have been recorded separately. Joining fees, foreign-currency markup, late-payment charges and taxes may still apply under issuer terms.</p>';
+    } else {
+      html += '<div class="modal-item-list">';
+      html += feeBenefits.map(benefit =>
+        '<article class="modal-info-item"><h3>' + escape(benefit.name || "Fee-related benefit") + '</h3>' +
+        '<p>' + escape(benefit.description || "") + '</p>' +
+        (benefit.conditions ? '<div class="modal-detail-line"><strong>Conditions</strong><span>' + escape(benefit.conditions) + '</span></div>' : '') +
+        (benefit.sourceQuote ? '<blockquote class="modal-source-quote"><strong>Issuer quote</strong><br>“' + escape(benefit.sourceQuote) + '”</blockquote>' : '') +
+        sourceLink(benefit, card) + '</article>'
+      ).join("");
+      html += '</div>';
+    }
+    html += '<p class="modal-muted-note">A missing fee value means it has not been recorded in this catalogue; it does not mean the fee is zero.</p>';
+    return html;
+  }
+
+  function renderTab(card, tab) {
+    switch (tab) {
+      case "rules": return renderRules(card);
+      case "restrictions": return renderRestrictions(card);
+      case "fees": return renderFees(card);
+      default: return renderBenefits(card);
+    }
+  }
+
+  window.CRI_CARD_MODAL = { renderTab, renderBenefits, renderRules, renderRestrictions, renderFees };
+})();
