@@ -6,15 +6,25 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
-  "ai": { "binding": "AI" },
+  "ai": {
+    "binding": "AI"
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "credit-card-rewards",
       "database_id": "b57383f5-81bd-4cc3-a52b-d7266edb246d",
       "migrations_dir": "migrations"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "card-rewards.petalfolio.co.in",
+      "custom_domain": true
     }
   ]
 }
