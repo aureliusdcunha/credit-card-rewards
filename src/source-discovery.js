@@ -58,8 +58,16 @@ export function validateOfficialUrl(raw) {
   return url;
 }
 
-export function issuerDomainFor(issuer) {
+export function issuerDomainFor(issuer, cardName = "") {
   const value = String(issuer || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const card = String(cardName || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+  // SBI's consumer credit-card catalogue is operated by SBI Card, not the
+  // State Bank of India's bank-information website. If a card name is supplied,
+  // route SBI-card discovery to the official card issuer domain.
+  const isSbiIssuer = /(^|\s)(?:sbi|state bank of india)(\s|$)/.test(value);
+  if (isSbiIssuer && card) return "sbicard.com";
+
   const match = ISSUER_DOMAIN_MAP.find(entry => entry.terms.some(term => value.includes(term)));
   return match ? match.domain : null;
 }
@@ -484,6 +492,22 @@ function knownOfficialFallbacks(issuer, cardName) {
       }
     ];
   }
+  if ((issuerText.includes("sbi") || issuerText.includes("state bank of india")) && /simply\s*save|simplysave/.test(cardText)) {
+    return [
+      {
+        url: "https://www.sbicard.com/en/personal/credit-cards/simplysave-sbi-card.html",
+        title: "SimplySAVE SBI Card — official card details, benefits and fees",
+        domain: "www.sbicard.com",
+        score: 170
+      },
+      {
+        url: "https://www.sbicard.com/en/most-important-terms-and-conditions.page",
+        title: "SBI Card Most Important Terms and Conditions",
+        domain: "www.sbicard.com",
+        score: 128
+      }
+    ];
+  }
   if (issuerText.includes("axis") && cardText.includes("horizon")) {
     return [
       {
@@ -509,7 +533,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   if (issuerValue.length < 2) throw new Error("Enter the bank or card issuer.");
   if (cardValue.length < 2) throw new Error("Enter the exact credit-card name or variant.");
 
-  const domain = issuerDomainFor(issuerValue);
+  const domain = issuerDomainFor(issuerValue, cardValue);
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   const safeIssuer = issuerValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   const queries = domain
