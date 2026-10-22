@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CATEGORIES, normalizeCategory, normalizeDraftCategories, explicitPerAmountFromQuote } from "../src/category-normalizer.js";
+import { CATEGORIES, normalizeCategory, normalizeDraftCategories, explicitPerAmountFromQuote, sanitizeIncompleteEarningRules } from "../src/category-normalizer.js";
 
 test("normalizes common reward category labels to canonical categories", () => {
   assert.equal(normalizeCategory("flights"), "airline_direct");
@@ -89,4 +89,42 @@ test("does not invent a denominator when the source quote has no explicit spend 
   };
   normalizeDraftCategories(draft);
   assert.equal(draft.rules[0].perAmount, 0);
+});
+
+
+test("removes unquantified multiplier claims from calculator rules and preserves them for review", () => {
+  const draft = {
+    rules: [{
+      category: "other",
+      rate: null,
+      perAmount: null,
+      unit: null,
+      sourceQuote: "Earn 6x-12x reward points on flights, hotels and shopping vouchers",
+      notes: "The source does not specify the exact rate or per amount for the reward points"
+    }],
+    benefits: [],
+    missingItems: []
+  };
+  sanitizeIncompleteEarningRules(draft);
+  assert.equal(draft.rules.length, 0);
+  assert.equal(draft.benefits.length, 1);
+  assert.match(draft.benefits[0].sourceQuote, /6x-12x/i);
+  assert.equal(draft.missingItems.length, 1);
+  assert.match(draft.missingItems[0], /positive spend denominator/i);
+});
+
+test("keeps complete earning rules while isolating another incomplete rule", () => {
+  const draft = {
+    rules: [
+      { category: "general", rate: 2, perAmount: 100, unit: "Reward Points", sourceQuote: "2 points per ₹100" },
+      { category: "other", rate: null, perAmount: null, unit: null, sourceQuote: "Earn 6x to 12x points" }
+    ],
+    benefits: [],
+    missingItems: []
+  };
+  sanitizeIncompleteEarningRules(draft);
+  assert.equal(draft.rules.length, 1);
+  assert.equal(draft.rules[0].rate, 2);
+  assert.equal(draft.benefits.length, 1);
+  assert.equal(draft.missingItems.length, 1);
 });
