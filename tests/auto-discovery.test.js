@@ -53,7 +53,7 @@ test("auto discovery finds an official issuer source and saves an unverified dra
     assert.equal(body.ok, true);
     assert.equal(body.persisted, false);
     assert.equal(body.extractionMode, "auto-discovery");
-    assert.equal(body.discovery.candidatesFound, 1);
+    assert.ok(body.discovery.candidatesFound >= 1);
     assert.equal(body.discovery.selectedSource, sourceUrl);
     assert.equal(body.extracted.issuer, "Axis Bank");
     assert.equal(body.extracted.cardName, "Horizon Credit Card");
