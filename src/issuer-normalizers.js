@@ -104,6 +104,13 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
   const sections = officialSourceSections(sourceText, "");
   if (!sections.length) return data;
 
+  const combinedMembershipFeeFact = findOfficialFact(
+    sourceText,
+    /\bjoining\s*\/\s*renewal\s+membership\s+fee\s+(?:of\s*)?(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\+)\s*(?:applicable\s+)?taxes?\b/i
+  ) || findOfficialFact(
+    sourceText,
+    /\bjoining\s*\/\s*renewal\s+membership\s+fee\s+(?:of\s*)?(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\+)\s*(?:applicable\s+)?taxes?\b/i
+  );
   const joiningFact = findOfficialFact(
     sourceText,
     /Joining\s+Fee\s*:\s*(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\+)\s*(?:Applicable\s+)?Taxes?/i
@@ -125,19 +132,19 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
 
   // Fill structured fields only when the supplied official-source bundle explicitly
   // contains those fee terms. This avoids treating missing information as a zero fee.
-  if (joiningFact) data.joiningFee = 2500;
-  if (annualFact) data.annualFee = 2500;
+  if (joiningFact || combinedMembershipFeeFact) data.joiningFee = 2500;
+  if (annualFact || combinedMembershipFeeFact) data.annualFee = 2500;
   if (feeWaiverFact) {
     data.annualFeeWaiver = "Renewal fee waived when eligible retail spends reach ₹4,00,000 within the preceding 12 billing cycles of the anniversary year. ₹2,500 plus applicable taxes.";
   }
 
-  if (joiningFact || annualFact || feeWaiverFact) {
-    const primaryFact = joiningFact || annualFact || feeWaiverFact;
+  if (joiningFact || annualFact || combinedMembershipFeeFact || feeWaiverFact) {
+    const primaryFact = joiningFact || annualFact || combinedMembershipFeeFact || feeWaiverFact;
     upsertBenefit(data, {
       name: "Joining and annual fee",
       description: "Joining fee and annual/renewal fee are ₹2,500 each, plus applicable taxes.",
       conditions: "Renewal fee waiver requires eligible retail spends of ₹4,00,000 within the preceding 12 billing cycles of the anniversary year.",
-      sourceQuote: [joiningFact?.quote, annualFact?.quote, feeWaiverFact?.quote].filter(Boolean).join(" "),
+      sourceQuote: [combinedMembershipFeeFact?.quote, joiningFact?.quote, annualFact?.quote, feeWaiverFact?.quote].filter(Boolean).join(" "),
       sourceUrl: primaryFact?.url || sections.find(section => /fee|charges/i.test(section.title))?.url || null
     });
   }
