@@ -76,6 +76,11 @@
   function renderRestrictions(card) {
     const exclusions = Array.isArray(card.exclusions) ? card.exclusions : [];
     const rules = Array.isArray(card.rules) ? card.rules : [];
+    const benefits = Array.isArray(card.benefits) ? card.benefits : [];
+    const eligibilityBenefits = benefits.filter(benefit =>
+      /\b(?:lounge|spend threshold|preceding calendar quarter|minimum spend|minimum .*transaction|eligibility|eligible spends?|priority pass|milestone spend)\b/i
+        .test([benefit.name, benefit.description, benefit.conditions, benefit.sourceQuote].filter(Boolean).join(" "))
+    );
     const conditionalRules = rules.filter(rule =>
       rule.notes || rule.minTransaction != null || rule.cap || rule.validFrom || rule.validTo
     );
@@ -124,6 +129,25 @@
       }).join("");
       html += '</div>';
     }
+    html += '<h3 class="modal-subsection-title">Benefit eligibility and spend thresholds</h3>';
+    if (!eligibilityBenefits.length) {
+      html += '<p class="modal-muted-note">No lounge or benefit-specific spend thresholds are recorded. This does not mean the issuer has no such conditions; check the current official card terms.</p>';
+    } else {
+      html += '<div class="modal-item-list">';
+      html += eligibilityBenefits.map(benefit => {
+        const dates = validity(benefit);
+        return '<article class="modal-info-item modal-compact-item">' +
+          '<div class="modal-info-item-top"><h3>' + escape(benefit.name || "Benefit eligibility condition") + '</h3>' +
+          (benefit.status ? C.statusPill(benefit.status) : '') + '</div>' +
+          '<p>' + escape(benefit.description || "No description supplied.") + '</p>' +
+          (benefit.conditions ? '<div class="modal-detail-line"><strong>Eligibility / spend condition</strong><span>' + escape(benefit.conditions) + '</span></div>' : '') +
+          (benefit.sourceQuote ? '<blockquote class="modal-source-quote"><strong>Issuer quote</strong><br>“' + escape(benefit.sourceQuote) + '”</blockquote>' : '') +
+          (dates ? '<div class="modal-detail-line"><strong>Validity</strong><span>' + escape(dates) + '</span></div>' : '') +
+          sourceLink(benefit, card) +
+          '</article>';
+      }).join("");
+      html += '</div>';
+    }
     return html;
   }
 
@@ -133,10 +157,17 @@
       /\b(?:fee|fees|waiv|joining|renewal|charge|markup|finance charge|late payment|foreign currency|forex)\b/i
         .test([benefit.name, benefit.description, benefit.conditions, benefit.sourceQuote].filter(Boolean).join(" "))
     );
+    const hasTaxNote = feeBenefits.some(benefit => /tax(?:es)?/i.test([benefit.description, benefit.conditions, benefit.sourceQuote].filter(Boolean).join(" ")));
+    const joiningFeeLabel = card.joiningFee == null
+      ? "Not separately recorded"
+      : C.formatINR(card.joiningFee) + (hasTaxNote ? " + applicable taxes" : "");
+    const annualFeeLabel = card.annualFee == null
+      ? "Not specified"
+      : C.formatINR(card.annualFee) + (hasTaxNote ? " + applicable taxes" : "");
     let html = sectionIntro("Fees and waiver terms recorded for this card.", "Fee summary");
     html += '<div class="modal-fee-grid">' +
-      '<article class="modal-fee-card"><span>Annual fee</span><strong>' + escape(C.formatINR(card.annualFee)) + '</strong></article>' +
-      '<article class="modal-fee-card"><span>Joining fee</span><strong>Not separately recorded</strong></article>' +
+      '<article class="modal-fee-card"><span>Annual fee</span><strong>' + escape(annualFeeLabel) + '</strong></article>' +
+      '<article class="modal-fee-card"><span>Joining fee</span><strong>' + escape(joiningFeeLabel) + '</strong></article>' +
       '</div>';
     html += '<article class="modal-info-item modal-fee-waiver"><h3>Annual fee waiver</h3>' +
       (card.annualFeeWaiver ? '<p>' + escape(card.annualFeeWaiver) + '</p>' : '<p>No annual-fee waiver details have been recorded. Check the official terms.</p>') +
