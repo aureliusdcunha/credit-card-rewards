@@ -101,3 +101,11 @@ test("Source Review accepts an optional issuer-matched official URL in automatic
   assert.ok(sourceScript.includes('document.getElementById("discover-source-url")?.value.trim()'));
   assert.ok(sourceScript.includes("sourceUrl:"));
 });
+
+
+test("Source Review uses the selected existing card's exact name and current release assets", async () => {
+  const sourceScript = await readFile(new URL("../public/js/sources.js", import.meta.url), "utf8");
+  assert.ok(sourceScript.includes("cardName: sameIssuer ? selectedExistingCard.name : typedCardName"));
+  assert.ok(sourceScript.includes("const selectedExistingCard = cards.find"));
+  assert.ok(sourceScript.includes("sourceUrl: document.getElementById(\"discover-source-url\")?.value.trim() || \"\""));
+});
