@@ -304,22 +304,29 @@ async function autoExtractCard(request, env) {
   catch (error) { return json({ error: error.message || "Could not discover official issuer sources." }, 422); }
 
   const sourceErrors = [];
-  let selectedSource = null;
-  for (const candidate of candidates.slice(0, 8)) {
+  const selectedSources = [];
+  const isHdfcRegalia = /hdfc/i.test(issuer) && /regalia/i.test(cardName) && /gold/i.test(cardName);
+  // HDFC Regalia details are spread across a landing page, a feature page and
+  // dated terms PDFs. Reading just the landing page often captures benefits but
+  // misses the numeric baseline earning rate, so merge several official sources.
+  const maxSources = isHdfcRegalia ? 4 : 3;
+  for (const candidate of candidates.slice(0, 10)) {
+    if (selectedSources.length >= maxSources) break;
     try {
       const fetched = await fetchOfficialSource(candidate.url, env.AI);
       if (!fetched.text || fetched.text.length < 100) continue;
-      selectedSource = {
-        url: fetched.url,
+      const url = fetched.url;
+      if (selectedSources.some(source => source.url === url)) continue;
+      selectedSources.push({
+        url,
         title: fetched.title || candidate.title || "Official issuer source",
-        text: fetched.text.slice(0, MAX_SOURCE_CHARS)
-      };
-      break;
+        text: fetched.text.slice(0, Math.floor(MAX_SOURCE_CHARS / maxSources))
+      });
     } catch (error) {
       sourceErrors.push(String(error?.message || error).slice(0, 160));
     }
   }
-  if (!selectedSource) {
+  if (!selectedSources.length) {
     const details = sourceErrors.length
       ? " Details: " + sourceErrors.slice(0, 3).join(" | ")
       : " The candidates returned too little readable text.";
@@ -330,6 +337,21 @@ async function autoExtractCard(request, env) {
       sourceCandidates: candidates.slice(0, 8).map(item => ({ title: item.title, url: item.url }))
     }, 422);
   }
+
+  const selectedSource = selectedSources[0];
+  const combinedSourceText = selectedSources.map((source, index) =>
+    [
+      `OFFICIAL SOURCE ${index + 1}`,
+      `TITLE: ${source.title}`,
+      `URL: ${source.url}`,
+      "SOURCE TEXT START",
+      source.text,
+      "SOURCE TEXT END"
+    ].join("\n")
+  ).join("\n\n");
+  const combinedSourceTitle = selectedSources.length === 1
+    ? selectedSource.title
+    : `${issuer} ${cardName} — ${selectedSources.length} official sources`;
 
   // Reuse the existing validated extraction + D1 draft path. Nothing is published automatically.
   const extractionRequest = new Request(new URL("/api/admin/extract", request.url), {
@@ -343,8 +365,8 @@ async function autoExtractCard(request, env) {
       cardName,
       cardId: body.cardId || null,
       sourceUrl: selectedSource.url,
-      sourceTitle: selectedSource.title,
-      sourceText: selectedSource.text,
+      sourceTitle: combinedSourceTitle,
+      sourceText: combinedSourceText.slice(0, MAX_SOURCE_CHARS),
       deduplicatePending: true
     })
   });
@@ -360,7 +382,8 @@ async function autoExtractCard(request, env) {
       requestedCardName: cardName,
       candidatesFound: candidates.length,
       selectedSource: selectedSource.url,
-      sourceTitle: selectedSource.title,
+      sourceTitle: combinedSourceTitle,
+      sourcesRead: selectedSources.map(source => ({ title: source.title, url: source.url })),
       sourceCandidates: candidates.slice(0, 8).map(item => ({ title: item.title, url: item.url }))
     },
     warning: "AI output is a draft, not verified card data. Confirm the exact card variant and every rate, exclusion, cap, benefit, effective date, and source quotation before publishing."
