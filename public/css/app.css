@@ -974,3 +974,64 @@ select { color-scheme: dark; }
   .card-modal-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .tile-bottom { align-items:flex-start; flex-direction:column; }
 }
+
+
+/* 0.5.1 interaction contrast patch — especially visible text selection and tabs */
+::selection,
+::-moz-selection {
+  background: rgba(85, 214, 179, .38) !important;
+  color: #f2fffa !important;
+  text-shadow: none !important;
+}
+body.card-modal-open,
+.card-modal-dialog,
+.card-modal-dialog * {
+  -webkit-tap-highlight-color: rgba(85, 214, 179, .16);
+}
+.card-modal-dialog ::selection,
+.card-modal-dialog *::selection,
+.card-modal-dialog ::-moz-selection,
+.card-modal-dialog *::-moz-selection {
+  background: rgba(85, 214, 179, .42) !important;
+  color: #ffffff !important;
+}
+.card-modal-tabs [role="tab"] {
+  color: #9bb1be !important;
+  background: #131f29 !important;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  outline-offset: -3px;
+  transition: color .12s ease, background .12s ease, border-color .12s ease;
+}
+.card-modal-tabs [role="tab"]:hover {
+  color: #e8fff8 !important;
+  background: #20343d !important;
+  border-color: #35515d;
+}
+.card-modal-tabs [role="tab"][aria-selected="true"] {
+  color: #78edcb !important;
+  background: #193b36 !important;
+  border-color: #2c5c52;
+  box-shadow: inset 0 2px 0 #55d6b3;
+}
+.card-modal-tabs [role="tab"][aria-selected="true"]:hover {
+  color: #e6fff7 !important;
+  background: #205149 !important;
+  border-color: #39796b;
+}
+.card-modal-tabs [role="tab"]:focus-visible,
+.card-modal-close:focus-visible {
+  outline: 2px solid #70e0bc;
+  outline-offset: -3px;
+  box-shadow: 0 0 0 3px rgba(85, 214, 179, .12);
+}
+.card-modal-tabs [role="tab"]:active {
+  background: #244b47 !important;
+  color: #ffffff !important;
+}
+input::selection,
+textarea::selection,
+[contenteditable="true"]::selection {
+  background: rgba(85, 214, 179, .44) !important;
+  color: #ffffff !important;
+}

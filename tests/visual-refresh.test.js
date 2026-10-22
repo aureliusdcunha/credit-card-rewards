@@ -46,10 +46,20 @@ test("all pages reference the current release and cache-busted assets", async ()
     "../public/sources.html"
   ]) {
     const html = await read(path);
-    assert.ok(html.includes("app.css?v=0.5.0.0"), path + " needs the terminal stylesheet cache key");
+    assert.ok(html.includes("app.css?v=0.5.1.0"), path + " needs the terminal stylesheet cache key");
     assert.ok(html.includes(`v${APP_VERSION} · build ${APP_BUILD}`), path + " needs current release metadata");
   }
   const layout = await read("../public/js/layout.js");
   assert.ok(layout.includes(`const APP_VERSION = "${APP_VERSION}";`));
   assert.ok(layout.includes(`const APP_BUILD = "${APP_BUILD}";`));
+});
+
+
+test("data terminal keeps selected text readable on dark surfaces", async () => {
+  const css = await read("../public/css/app.css");
+  assert.match(css, /::selection,\s*\n?::-moz-selection\s*\{[^}]*color:\s*#f2fffa\s*!important/s);
+  assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]:hover\s*\{[^}]*color:\s*#e8fff8\s*!important/s);
+  assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]\[aria-selected="true"\]\s*\{[^}]*background:\s*#193b36\s*!important/s);
+  assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]\[aria-selected="true"\]:hover\s*\{[^}]*color:\s*#e6fff7\s*!important/s);
+  assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]:focus-visible,\s*\.card-modal-close:focus-visible\s*\{[^}]*outline:\s*2px solid #70e0bc/s);
 });
