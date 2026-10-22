@@ -78,6 +78,26 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
     }
   }
 
+  // Base reward rates are sometimes mislabelled during extraction under a merchant
+  // category. For verified cards only, allow a cross-category fallback when the source
+  // quote explicitly states a numeric rate basis on retail spend. Never promote bonus,
+  // SmartBuy, partner-outlet or select-brand multipliers to a general rate.
+  if (!chosen && card.reviewStatus === "verified") {
+    const retailBaseRules = eligibleRules.filter(rule => {
+      const detail = String(rule.sourceQuote || "") + " " + String(rule.notes || "");
+      const statesRetailBasis = /\bretail\s+spends?\b/i.test(detail);
+      const statesNumericSpendBasis =
+        /\b(?:per|every|each)\s+(?:₹|rs\.?\s*|inr\s*)?\s*\d[\d,]*(?:\.\d+)?\b/i.test(detail) ||
+        /\b\d[\d,]*(?:\.\d+)?\s*(?:₹|rs\.?|inr)\b/i.test(detail);
+      const accelerated = /\b(?:accelerated|bonus|smartbuy|partner outlets?|select brands?|\d\s*[x×]|multipliers?)\b/i.test(detail);
+      return rule.category !== "general" && statesRetailBasis && statesNumericSpendBasis && !accelerated;
+    }).sort(byPriority);
+    if (retailBaseRules.length) {
+      chosen = retailBaseRules[0];
+      fallbackKind = "retail_base";
+    }
+  }
+
   // Domestic/international are spend geography, not merchant categories. This app
   // currently has one category selector, so for a verified Indian card with no exact
   // merchant/general rule we use its domestic base as an explicitly caveated fallback.
@@ -175,6 +195,8 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   if (capMessage) notes.push(capMessage);
   if (fallbackKind === "other_spend") {
     notes.push("No exact-category rule was found; a verified rule quoted for 'other eligible spend' was used as the fallback. Confirm that the issuer's wording covers this merchant category.");
+  } else if (fallbackKind === "retail_base") {
+    notes.push("No exact-category rule was found; a reviewed base rate explicitly quoted for retail spends was used as the fallback. Verify that the purchase qualifies as eligible retail spend and is not excluded by merchant category code or issuer transaction rules.");
   } else if (fallbackKind === "domestic") {
     notes.push("No exact-category or general rule was found; a verified domestic-spend rate was used as a fallback. This assumes the transaction is domestic; this page does not separately ask for transaction geography.");
   } else if (fallbackKind === "general" && category !== "general") {
@@ -185,11 +207,14 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   }
   notes.push("Reward posting can differ because of rounding, transaction posting date, MCC classification, reversals, offers and issuer-specific rules.");
 
+  const ruleDescription = fallbackKind === "retail_base"
+    ? "base retail-spend fallback"
+    : chosen.category === "general" ? "base" : "category-specific";
   return {
     ok: true, excluded: false, capped, cardId: card.id, cardName: card.name, amount: spend,
     eligibleAmount, points, rewardUnit: chosen.unit || card.rewardCurrency || "Rewards", valueINR: null,
     category, rate, perAmount, ruleStatus: ruleIsDemo ? "demo" : "approved",
-    explanation: `${rate} ${chosen.unit || card.rewardCurrency || "rewards"} per ₹${perAmount} under the selected ${chosen.category === "general" ? "base" : "category-specific"} rule.`,
+    explanation: `${rate} ${chosen.unit || card.rewardCurrency || "rewards"} per ₹${perAmount} under the selected ${ruleDescription} rule.`,
     notes, sourceUrl: card.officialUrl || null, sourceQuote: chosen.sourceQuote || null
   };
 }
