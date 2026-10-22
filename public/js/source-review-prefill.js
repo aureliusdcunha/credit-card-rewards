@@ -1,6 +1,6 @@
 (() => {
   const clean = value => String(value == null ? "" : value).trim();
-  const normalize = value => clean(value).replace(/\\s+/g, " ").toLowerCase();
+  const normalize = value => clean(value).replace(/\s+/g, " ").toLowerCase();
 
   function buildHref(card, baseHref = window.location.href) {
     const url = new URL("/sources.html", baseHref);
