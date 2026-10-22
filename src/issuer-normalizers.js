@@ -107,9 +107,6 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
   const combinedMembershipFeeFact = findOfficialFact(
     sourceText,
     /\bjoining\s*\/\s*renewal\s+membership\s+fee\s+(?:of\s*)?(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\+)\s*(?:applicable\s+)?taxes?\b/i
-  ) || findOfficialFact(
-    sourceText,
-    /\bjoining\s*\/\s*renewal\s+membership\s+fee\s+(?:of\s*)?(?:₹|Rs\.?\s*)?2,?500\s*(?:plus|\+)\s*(?:applicable\s+)?taxes?\b/i
   );
   const joiningFact = findOfficialFact(
     sourceText,
