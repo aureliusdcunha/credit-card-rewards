@@ -487,7 +487,7 @@ test("extracts combined Regalia Gold joining/renewal membership fee as both ₹2
     "TITLE: HDFC Bank Regalia Gold — Fees and Charges",
     "URL: " + feePage,
     "SOURCE TEXT START",
-    "Joining / Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
+    "Joining/ Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
     "Spend ₹4,00,000 within the preceding 12 billing cycles of your anniversary year to waive the renewal fee for the following year.",
     "SOURCE TEXT END"
   ].join("\n");
@@ -520,7 +520,7 @@ test("extracts combined Regalia Gold joining/renewal membership fee as both ₹2
   const feeBenefit = draft.benefits.find(item => item.name === "Joining and annual fee");
   assert.ok(feeBenefit);
   assert.match(feeBenefit.description, /₹2,500 each, plus applicable taxes/i);
-  assert.match(feeBenefit.sourceQuote, /Joining \/ Renewal Membership Fee of Rs\. 2500 \+ Applicable Taxes/i);
+  assert.match(feeBenefit.sourceQuote, /Joining\/ Renewal Membership Fee of Rs\. 2500 \+ Applicable Taxes/i);
   assert.match(feeBenefit.sourceQuote, /Spend ₹4,00,000/);
   assert.equal(feeBenefit.sourceUrl, feePage);
 });
