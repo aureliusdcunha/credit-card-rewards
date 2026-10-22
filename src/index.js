@@ -2,7 +2,7 @@ import { getCards, getDrafts } from "./db.js";
 import { calculateRewards } from "./rules-engine.js";
 import { discoverOfficialUrls, validateOfficialUrl } from "./source-discovery.js";
 import { normalizeDraftRewardUnits } from "./reward-units.js";
-import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts } from "./issuer-normalizers.js";
+import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts, normalizeSbiSimplySaveExtraction } from "./issuer-normalizers.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
 import { deduplicatePendingDraftRows, draftIdentity, sameCardIdentity, normalizeIdentityPartForCompare, normalizeSourceUrl } from "./draft-dedupe.js";
 import { APP_VERSION, APP_BUILD } from "./version.js";
@@ -347,6 +347,12 @@ async function aiExtract(request, env) {
     // Apply the same fee/eligibility source normalization to every issuer/card,
     // not only the Regalia Gold-specific reward-rate parser.
     extracted = normalizeCommonCardFacts(extracted, {
+      issuer: body.issuer,
+      cardName: body.cardName,
+      sourceText,
+      sourceUrl: intake.sourceUrl
+    });
+    extracted = normalizeSbiSimplySaveExtraction(extracted, {
       issuer: body.issuer,
       cardName: body.cardName,
       sourceText,
