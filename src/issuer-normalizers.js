@@ -293,6 +293,54 @@ function genericUpsertBenefit(data, benefit) {
  * eligibility conditions when an explicit matching fact is present in official
  * source text; otherwise leaves unknown values unknown.
  */
+const CARD_NETWORKS = [
+  { label: "American Express", pattern: /\b(?:american\s+express|amex)\b/i },
+  { label: "Diners Club", pattern: /\bdiners?\s+club(?:\s+international)?\b/i },
+  { label: "Mastercard", pattern: /\bmaster\s*card\b/i },
+  { label: "Visa", pattern: /\bvisa\b/i },
+  { label: "RuPay", pattern: /\brupay\b/i }
+];
+
+function extractExplicitCardNetwork(sections) {
+  const cues = [
+    /\b(?:card|payment)\s+network\b/i,
+    /\bnetwork\s+(?:type|variant)\b/i,
+    /\b(?:available|issued|offered)\s+(?:on|through|in|as)\s+(?:the\s+)?(?:visa|master\s*card|rupay|american\s+express|amex|diners?\s+club)\b/i,
+    /\b(?:choose|select)\s+(?:your|a)\s+(?:card\s+)?network\b/i,
+    /\b(?:visa|master\s*card|rupay|american\s+express|amex|diners?\s+club)\b.{0,30}\bnetwork\b/i
+  ];
+  for (const section of sections) {
+    const clauses = String(section.text || "")
+      .split(/\n+|(?<=[.!?;])\s+/)
+      .map(value => value.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    for (const clause of clauses) {
+      if (!cues.some(cue => cue.test(clause))) continue;
+      const found = CARD_NETWORKS
+        .map(network => ({ label: network.label, index: clause.search(network.pattern) }))
+        .filter(network => network.index >= 0)
+        .sort((a, b) => a.index - b.index)
+        .map(network => network.label);
+      const unique = [...new Set(found)];
+      if (!unique.length) continue;
+      const variantDependent = unique.length > 1 &&
+        /\b(?:depending on|variant|variants|choice|choose|either|or)\b/i.test(clause);
+      return {
+        value: unique.length === 1
+          ? unique[0]
+          : unique.join(" / ") + (variantDependent ? " (variant-dependent)" : ""),
+        quote: clause.slice(0, 320),
+        sourceUrl: section.url || null
+      };
+    }
+  }
+  return null;
+}
+
+function isUnknownCardNetwork(value) {
+  return !String(value || "").trim() || /^(?:not specified|not recorded|unknown|n\/?a|none|null)$/i.test(String(value).trim());
+}
+
 export function normalizeCommonCardFacts(data, context = {}) {
   if (!data || typeof data !== "object") return data;
   if (!Array.isArray(data.benefits)) data.benefits = [];
@@ -300,8 +348,18 @@ export function normalizeCommonCardFacts(data, context = {}) {
 
   const sections = officialSourceSections(String(context.sourceText || ""), context.sourceUrl || "");
   if (!sections.length) return data;
-  const clauses = officialClauses(sections);
 
+  // The payment network is separate from the rewards currency. Populate it only
+  // when the supplied official card source explicitly ties a network to the card.
+  const networkFact = extractExplicitCardNetwork(sections);
+  if (networkFact) {
+    data.network = networkFact.value;
+  } else if (isUnknownCardNetwork(data.network)) {
+    data.network = null;
+    addMissingItem(data, "Could not verify the payment network for this exact card variant from the supplied official source. Confirm Visa, Mastercard, RuPay, American Express or other network details before publishing.");
+  }
+
+  const clauses = officialClauses(sections);
   const joiningFact = explicitFeeFact(clauses, "joining");
   const annualFact = explicitFeeFact(clauses, "annual");
   const waiverFact = findWaiverFact(clauses);
