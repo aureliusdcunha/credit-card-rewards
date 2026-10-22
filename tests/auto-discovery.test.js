@@ -305,11 +305,13 @@ test("HDFC Regalia Gold extraction combines multiple official sources and produc
   const originalFetch = globalThis.fetch;
   const primaryUrl = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
   const featureUrl = "https://v.hdfc.bank.in/regalia-gold/features.html";
+  const feePageUrl = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card/fees-and-charges";
   const rewardTermsUrl = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-travel-edge-tnc.pdf";
   const generalTermsUrl = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/terms-and-conditions.pdf";
   const fetchedUrls = [];
   const sourcePages = {
     [primaryUrl]: "<html><head><title>HDFC Bank Regalia Gold Credit Card</title></head><body><h1>Regalia Gold</h1><p>Welcome benefits: complimentary Swiggy One and MMT Black Gold membership after spends of ₹1 lakh in the first 90 days.</p><p>Travel benefits: domestic and international airport lounge access subject to terms.</p></body></html>",
+    [feePageUrl]: "<html><head><title>Regalia Gold fees and charges</title></head><body><h1>Fees and Charges</h1><p>Joining/ Renewal Membership Fee of Rs. 2500 + Applicable Taxes.</p><p>Get Renewal Fee waived for next renewal on spends of ₹4 Lakhs.</p><p>Issuer fees and charges are subject to the applicable tax and published card terms.</p></body></html>",
     [featureUrl]: "<html><head><title>Regalia Gold Features</title></head><body><h1>Rewarding Everyday Indulgences</h1><p>5 Reward Points for every ₹200 spent on daily and retail spends such as grocery, apparel, utility/bill pay, insurance and school fees, subject to terms.</p><p>Dining benefits: savings on restaurant bills via Swiggy Dineout when paid through the Swiggy app using Regalia Gold.</p><p>Milestone benefits: ₹5,000 worth flight vouchers on spends of ₹5 lakh and ₹7.5 lakh.</p></body></html>"
   };
   const pdfTexts = {
@@ -338,6 +340,7 @@ test("HDFC Regalia Gold extraction combines multiple official sources and produc
     network: null,
     rewardCurrency: "Reward Points",
     annualFee: 2500,
+    joiningFee: null,
     annualFeeWaiver: "Renewal fee waived on eligible annual spends of ₹4 lakh",
     effectiveDate: "2026-05-15",
     rules: [{
@@ -399,11 +402,17 @@ test("HDFC Regalia Gold extraction combines multiple official sources and produc
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.ok, true);
-    assert.equal(body.discovery.selectedSource, primaryUrl);
+    assert.equal(body.discovery.selectedSource, feePageUrl);
     assert.ok(body.discovery.sourcesRead.length >= 3);
     assert.ok(promptText.includes(featureUrl));
+    assert.ok(promptText.includes(feePageUrl), "fee terms must be included in the official source bundle");
     assert.ok(promptText.includes(rewardTermsUrl));
-    assert.ok(promptText.includes(generalTermsUrl));
+    assert.equal(body.extracted.annualFee, 2500);
+    assert.equal(body.extracted.joiningFee, 2500);
+    const feeBenefit = body.extracted.benefits.find(benefit => benefit.name === "Joining and annual fee");
+    assert.ok(feeBenefit);
+    assert.equal(feeBenefit.sourceUrl, feePageUrl);
+    assert.match(feeBenefit.sourceQuote, /Joining\/ Renewal Membership Fee of Rs\. 2500 \+ Applicable Taxes/i);
     assert.equal(body.extracted.rules.length, 1);
     assert.equal(body.extracted.rules[0].rate, 5);
     assert.equal(body.extracted.rules[0].perAmount, 200);
