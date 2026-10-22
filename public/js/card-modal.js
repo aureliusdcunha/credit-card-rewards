@@ -42,35 +42,47 @@
 
   function renderRules(card) {
     const rules = Array.isArray(card.rules) ? card.rules : [];
-    let html = sectionIntro("Earning rates approved for the selected card.", rules.length + " rule(s)");
+    const approvedRules = rules.filter(rule => rule.status === "approved").length;
+    let html = sectionIntro("EARNING RULES // APPROVED RATE MATRIX", rules.length + " record(s) · " + approvedRules + " approved");
     if (!rules.length) {
-      return html + emptyState("No reward rules available", "The card has no published earning rules. Import current official terms, review the rates and source quotes, then publish the rules.");
+      return html + emptyState("No reward rules available", "This card can have details and benefits without a verified earning rule. Do not use an estimated reward rate until a complete rate, spend basis, reward unit and official source quote have been reviewed.");
     }
-    html += '<div class="modal-item-list">';
+    html += '<div class="terminal-table-wrap"><table class="terminal-table"><thead><tr>' +
+      '<th scope="col">Category</th><th scope="col">Earning formula</th><th scope="col">Minimum</th><th scope="col">Cap / limit</th><th scope="col">Validity</th><th scope="col">Status / evidence</th>' +
+      '</tr></thead><tbody>';
     html += rules.map(rule => {
       const dates = validity(rule);
+      const unit = rule.unit || card.rewardCurrency || "rewards";
+      const formula = C.formatNumber(rule.rate) + " " + unit + " / " + C.formatINR(rule.perAmount);
       const cap = rule.cap && typeof rule.cap === "object"
-        ? (rule.cap.type === "spend" ? C.formatINR(rule.cap.value) : C.formatNumber(rule.cap.value) + " " + (rule.unit || card.rewardCurrency || "rewards")) +
+        ? (rule.cap.type === "spend" ? C.formatINR(rule.cap.value) : C.formatNumber(rule.cap.value) + " " + unit) +
           (rule.cap.period ? " per " + String(rule.cap.period).replace(/_/g, " ") : "") +
           (rule.cap.overCapCategory ? "; then " + String(rule.cap.overCapCategory).replace(/_/g, " ") : "")
-        : "";
+        : "—";
       const minimum = rule.minTransaction != null && Number.isFinite(Number(rule.minTransaction)) && Number(rule.minTransaction) > 0
         ? C.formatINR(rule.minTransaction)
-        : "";
-      return '<article class="modal-info-item">' +
-        '<div class="modal-info-item-top"><h3>' + escape(C.prettyCategory(rule.category)) + '</h3>' +
-        C.statusPill(rule.status) + '</div>' +
-        '<div class="modal-rate-line"><strong>' + escape(C.formatNumber(rule.rate)) + ' ' + escape(rule.unit || card.rewardCurrency || "rewards") + '</strong><span>per ' + escape(C.formatINR(rule.perAmount)) + '</span></div>' +
-        (minimum ? '<div class="modal-detail-line"><strong>Minimum transaction</strong><span>' + escape(minimum) + '</span></div>' : '') +
-        (cap ? '<div class="modal-detail-line"><strong>Cap / limit</strong><span>' + escape(cap) + '</span></div>' : '') +
-        (rule.rounding ? '<div class="modal-detail-line"><strong>Rounding</strong><span>' + escape(rule.rounding) + '</span></div>' : '') +
-        (rule.notes ? '<p class="modal-rule-notes">' + escape(rule.notes) + '</p>' : '') +
-        (rule.sourceQuote ? '<blockquote class="modal-source-quote"><strong>Issuer quote</strong><br>“' + escape(rule.sourceQuote) + '”</blockquote>' : '') +
-        (dates ? '<div class="modal-detail-line"><strong>Validity</strong><span>' + escape(dates) + '</span></div>' : '') +
-        sourceLink(rule, card) +
-        '</article>';
+        : "—";
+      const sourceEvidence = rule.sourceQuote
+        ? '<blockquote>“' + escape(rule.sourceQuote) + '”</blockquote>'
+        : '<p class="terminal-muted">No source quote recorded.</p>';
+      return '<tr>' +
+        '<td class="terminal-category">' + escape(C.prettyCategory(rule.category)) + '</td>' +
+        '<td><span class="terminal-rate">' + escape(formula) + '</span>' +
+          (rule.rounding ? '<small class="terminal-muted terminal-cell-note">Rounding: ' + escape(rule.rounding) + '</small>' : '') +
+        '</td>' +
+        '<td>' + escape(minimum) + '</td>' +
+        '<td>' + escape(cap) + '</td>' +
+        '<td>' + escape(dates || "Not dated") + '</td>' +
+        '<td class="terminal-evidence">' +
+          C.statusPill(rule.status) +
+          '<details><summary>Inspect source evidence</summary>' + sourceEvidence + sourceLink(rule, card) + '</details>' +
+          (rule.notes ? '<details><summary>Rule notes</summary><p>' + escape(rule.notes) + '</p></details>' : '') +
+        '</td>' +
+      '</tr>';
     }).join("");
-    return html + '</div>';
+    html += '</tbody></table></div>';
+    html += '<p class="modal-muted-note">Rates remain tied to their quoted source. “—” means no value is recorded; it does not mean the condition is absent.</p>';
+    return html;
   }
 
   function renderRestrictions(card) {

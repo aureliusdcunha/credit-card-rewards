@@ -11,6 +11,7 @@
   const modal = document.getElementById("card-detail-modal");
   const modalDialog = modal?.querySelector(".card-modal-dialog");
   const modalTitle = document.getElementById("card-modal-title");
+  const modalSummary = document.getElementById("card-modal-summary");
   const modalSubtitle = document.getElementById("card-modal-subtitle");
   const modalPanel = document.getElementById("card-modal-panel");
   const modalStatus = document.getElementById("card-modal-review-status");
@@ -36,6 +37,31 @@
     modalPanel.scrollTop = 0;
   }
 
+  function renderCardSummary(card) {
+    if (!modalSummary) return;
+    const rules = Array.isArray(card.rules) ? card.rules : [];
+    const benefits = Array.isArray(card.benefits) ? card.benefits : [];
+    const exclusions = Array.isArray(card.exclusions) ? card.exclusions : [];
+    const approved = rules.filter(rule => rule.status === "approved").length;
+    const fee = value => value == null || value === "" || !Number.isFinite(Number(value)) ? "Not recorded" : C.formatINR(value);
+    const cell = (label, value, note, kind = "") =>
+      '<div class="card-summary-cell ' + kind + '">' +
+        '<span class="card-summary-label">' + C.escapeHtml(label) + '</span>' +
+        '<strong class="card-summary-value">' + C.escapeHtml(value) + '</strong>' +
+        (note ? '<span class="card-summary-note">' + C.escapeHtml(note) + '</span>' : '') +
+      '</div>';
+    const status = C.statusLabel(card.reviewStatus);
+    modalSummary.innerHTML = [
+      cell("Payment network", card.network || "Not recorded", "NETWORK / VARIANT"),
+      cell("Earning rules", String(rules.length), approved + " approved", rules.length ? "is-primary" : "is-warning"),
+      cell("Benefits", String(benefits.length), "Recorded benefits"),
+      cell("Restrictions", String(exclusions.length), "Explicit exclusions"),
+      cell("Annual fee", fee(card.annualFee), "Renewal / annual"),
+      cell("Joining fee", fee(card.joiningFee), "At application", card.joiningFee == null ? "is-warning" : "")
+    ].join("");
+    modalSummary.setAttribute("data-review-status", card.reviewStatus || "needs_review");
+  }
+
   function openCardModal(card, trigger) {
     if (!modal || !card) return;
     activeModalCard = card;
@@ -44,6 +70,7 @@
     modalTitle.textContent = card.name || "Card details";
     modalSubtitle.textContent = [card.issuer, card.rewardCurrency || "Rewards", card.network || "Network not recorded"].filter(Boolean).join(" · ");
     modalStatus.innerHTML = C.statusPill(card.reviewStatus);
+    renderCardSummary(card);
     modal.hidden = false;
     document.body.classList.add("card-modal-open");
     selectModalTab("benefits");

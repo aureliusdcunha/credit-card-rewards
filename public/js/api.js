@@ -38,16 +38,36 @@
   const initials = issuer => String(issuer || "CC").replace(/\b(bank|limited|ltd)\b/gi, "").trim().split(/\s+/).map(word => word[0]).join("").slice(0, 3).toUpperCase() || "CC";
   function renderCardTile(card, compact = false) {
     const rules = Array.isArray(card.rules) ? card.rules : [];
-    const verifiedRules = rules.filter(rule => rule.status === "approved").length;
-    const ruleCount = rules.length;
-    const benefitCount = Array.isArray(card.benefits) ? card.benefits.length : 0;
-    const statusText = card.reviewStatus === "verified" && verifiedRules ? "verified" : card.reviewStatus;
+    const approvedRules = rules.filter(rule => rule.status === "approved").length;
+    const benefits = Array.isArray(card.benefits) ? card.benefits : [];
+    const exclusions = Array.isArray(card.exclusions) ? card.exclusions : [];
+    const statusText = card.reviewStatus === "verified" && approvedRules ? "verified" : card.reviewStatus;
+    const annualFee = card.annualFee == null || !Number.isFinite(Number(card.annualFee))
+      ? "Not recorded"
+      : formatINR(card.annualFee);
+    const network = card.network || "Not recorded";
     return `<article class="credit-card-tile" data-card-id="${escapeHtml(card.id)}">
-      <div class="tile-top"><div class="bank-icon ${bankClass(card.issuer)}">${escapeHtml(initials(card.issuer))}</div>${statusPill(statusText)}</div>
-      <div class="tile-bank">${escapeHtml(card.issuer)}</div><h3 class="tile-title">${escapeHtml(card.name)}</h3>
+      <div class="tile-top">
+        <div class="bank-icon ${bankClass(card.issuer)}">${escapeHtml(initials(card.issuer))}</div>
+        <div class="tile-status-stack">${statusPill(statusText)}<small>RECORD ${escapeHtml(String(card.id || "").slice(0, 14).toUpperCase() || "—")}</small></div>
+      </div>
+      <div class="tile-bank">${escapeHtml(card.issuer)}</div>
+      <h3 class="tile-title">${escapeHtml(card.name)}</h3>
       <p class="tile-desc">${escapeHtml(card.description || "Issuer card details awaiting review.")}</p>
-      <div class="tile-meta"><div><div class="meta-label">Reward currency</div><div class="meta-value">${escapeHtml(card.rewardCurrency || "Rewards")}</div></div><div><div class="meta-label">Rules & benefits</div><div class="meta-value">${ruleCount ? `${ruleCount} rules · ${verifiedRules} verified` : "No rules yet"} · ${benefitCount} benefits</div></div></div>
-      <div class="tile-bottom"><span class="source-indicator ${card.reviewStatus === "verified" ? "verified" : ""}">${card.reviewStatus === "verified" ? "Official rules reviewed" : "Source needs review"}</span><button class="text-link view-rules-button" type="button" data-card-id="${escapeHtml(card.id)}">${compact ? "View card" : "View benefits & rules ↗"}</button></div>
+      <div class="tile-meta">
+        <div><div class="meta-label">Network</div><div class="meta-value">${escapeHtml(network)}</div></div>
+        <div><div class="meta-label">Reward currency</div><div class="meta-value">${escapeHtml(card.rewardCurrency || "Rewards")}</div></div>
+        <div><div class="meta-label">Earning rules</div><div class="meta-value">${rules.length} total · ${approvedRules} approved</div></div>
+        <div><div class="meta-label">Annual fee</div><div class="meta-value">${escapeHtml(annualFee)}</div></div>
+      </div>
+      <div class="tile-card-counts">
+        <span><b>${benefits.length}</b> BENEFITS</span>
+        <span><b>${exclusions.length}</b> EXCLUSIONS</span>
+      </div>
+      <div class="tile-bottom">
+        <span class="source-indicator ${card.reviewStatus === "verified" ? "verified" : ""}">${card.reviewStatus === "verified" ? "RULES REVIEWED" : "REVIEW REQUIRED"}</span>
+        <button class="button button-secondary button-small view-rules-button" type="button" data-card-id="${escapeHtml(card.id)}">${compact ? "Open record" : "View record ↗"}</button>
+      </div>
     </article>`;
   }
   window.CRI = { request, escapeHtml, formatINR, formatNumber, prettyCategory, statusLabel, statusPill, renderCardTile, bankClass, initials };

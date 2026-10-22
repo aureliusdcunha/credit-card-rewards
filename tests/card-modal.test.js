@@ -185,3 +185,34 @@ test("Restrictions tab shows condition-bearing benefits for any issuer, not only
   assert.match(html, /₹2,50,000/);
   assert.match(html, /https:\/\/issuer\.example\/horizon\/terms/);
 });
+
+
+test("Rules tab uses a compact terminal table with source evidence expandable per earning rule", () => {
+  const card = {
+    officialUrl: "https://issuer.example/terms",
+    rewardCurrency: "Reward Points",
+    rules: [{
+      category: "general",
+      rate: 5,
+      perAmount: 200,
+      unit: "Reward Points",
+      minTransaction: 500,
+      cap: { type: "points", value: 50000, period: "statement_cycle" },
+      rounding: "down",
+      validFrom: "2026-05-15",
+      sourceQuote: "5 Reward Points per ₹200 on eligible retail purchases.",
+      notes: "Eligible retail spends only",
+      status: "approved"
+    }]
+  };
+  const html = Modal.renderTab(card, "rules");
+  assert.match(html, /terminal-table-wrap/);
+  assert.match(html, /<th scope="col">Category/);
+  assert.match(html, /Earning formula/);
+  assert.match(html, /Cap \/ limit/);
+  assert.match(html, /5 Reward Points \/ ₹200/);
+  assert.match(html, /50,000 Reward Points per statement cycle/);
+  assert.match(html, /Inspect source evidence/);
+  assert.match(html, /5 Reward Points per ₹200 on eligible retail purchases/);
+  assert.match(html, /https:\/\/issuer\.example\/terms/);
+});
