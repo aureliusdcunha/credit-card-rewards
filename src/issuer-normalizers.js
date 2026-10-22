@@ -542,7 +542,7 @@ export function normalizeSbiSimplySaveExtraction(data, context = {}) {
     });
   } else if (acceleratedFact) {
     genericUpsertBenefit(data, {
-      name: "10X rewards on selected everyday categories — rate needs complete verification",
+      name: "Accelerated 10X rewards on selected everyday categories — rate needs complete verification",
       description: "The official source describes accelerated rewards on dining, movies, departmental stores and grocery, but the supplied official source bundle did not include the full numeric cap/rate conditions needed to safely publish these as calculator rules.",
       conditions: "Confirm the absolute points per ₹150 and the cumulative monthly cap from the current SimplySAVE card terms before using these categories in calculations.",
       sourceQuote: acceleratedFact.quote,
