@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 const oldWindow = globalThis.window;
 const C = {
@@ -184,4 +185,18 @@ test("Restrictions tab shows condition-bearing benefits for any issuer, not only
   assert.match(html, /Milestone voucher/);
   assert.match(html, /₹2,50,000/);
   assert.match(html, /https:\/\/issuer\.example\/horizon\/terms/);
+});
+
+
+test("card detail tabs reserve enough height and cannot shrink behind the content panel", async () => {
+  const css = await readFile(new URL("../public/css/app.css", import.meta.url), "utf8");
+  const tabContainerRule = css.match(/\.card-modal-tabs\s*\{([^}]*)\}/g)?.at(-1) || "";
+  const tabButtonRule = css.match(/\.card-modal-tabs\s+\[role=["']tab["']\]\s*\{([^}]*)\}/g)?.at(-1) || "";
+  const headerRule = css.match(/\.card-modal-header\s*,\s*\.card-modal-footer\s*\{([^}]*)\}/)?.[1] || "";
+
+  assert.match(tabContainerRule, /flex:\s*0\s+0\s+auto/);
+  assert.match(tabContainerRule, /min-height:\s*54px/);
+  assert.match(tabButtonRule, /align-items:\s*center/);
+  assert.match(tabButtonRule, /min-height:\s*42px/);
+  assert.match(headerRule, /flex:\s*0\s+0\s+auto/);
 });
