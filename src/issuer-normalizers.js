@@ -192,6 +192,185 @@ function enrichHdfcRegaliaFeesAndLounge(data, sourceText) {
   return data;
 }
 
+
+function officialClauses(sections) {
+  const clauses = [];
+  for (const section of sections) {
+    const chunks = String(section.text || "")
+      .split(/\n+|;\s*|(?<=[.!?])\s+(?=[A-Z₹])/g)
+      .map(value => value.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    for (const quote of chunks) {
+      clauses.push({ ...section, quote });
+    }
+  }
+  return clauses;
+}
+
+function numericCurrencyAmount(quote) {
+  const match = String(quote || "").match(/(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)/i);
+  if (!match) return null;
+  const amount = Number(match[1].replace(/,/g, ""));
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function explicitFeeFact(clauses, feeKind) {
+  const isJoining = feeKind === "joining";
+  const label = isJoining ? /\bjoining fee\b/i : /\b(?:annual|renewal|membership) fee\b/i;
+  const zeroLabel = isJoining
+    ? /\bno joining fee\b|\bjoining fee\s*(?::|is)?\s*(?:nil|zero|₹\s*0)\b/i
+    : /\bno (?:annual|renewal|membership) fee\b|\b(?:annual|renewal|membership) fee\s*(?::|is)?\s*(?:nil|zero|₹\s*0)\b/i;
+  const priceAfterLabel = isJoining
+    ? /\bjoining fee\b\s*(?:(?:is|of)\s*)?(?:[:\-]\s*)?(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)/i
+    : /\b(?:annual|renewal|membership) fee\b\s*(?:(?:is|of)\s*)?(?:[:\-]\s*)?(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)/i;
+
+  for (const clause of clauses) {
+    if (zeroLabel.test(clause.quote)) return { ...clause, amount: 0, explicitZero: true };
+    if (!label.test(clause.quote)) continue;
+    // Don't interpret a fee-waiver threshold, minimum spend or transaction spend as a fee.
+    const match = priceAfterLabel.exec(clause.quote);
+    if (!match) continue;
+    const gap = clause.quote.slice(match.index + match[0].indexOf("fee") + 3, match.index + match[0].length);
+    if (/\b(?:waiv|spend|minimum|threshold|eligible)\b/i.test(gap)) continue;
+    const amount = Number(match[1].replace(/,/g, ""));
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    return { ...clause, amount, explicitZero: amount === 0 };
+  }
+  return null;
+}
+
+function findWaiverFact(clauses) {
+  for (const clause of clauses) {
+    const quote = clause.quote;
+    const hasFeeContext = /\b(?:fee waiver|waiv\w*|renewal fee|annual fee)\b/i.test(quote);
+    const hasSpendContext = /\b(?:spend|spends|spent|annual purchase|eligible purchase|eligible transaction)\b/i.test(quote);
+    const hasThreshold = /(?:₹\s*|Rs\.?\s*|INR\s*)[\d,]+|\b\d+(?:\.\d+)?\s*(?:lakh|lakhs|k)\b/i.test(quote);
+    if (hasFeeContext && hasSpendContext && hasThreshold) return clause;
+  }
+  return null;
+}
+
+function findLoungeSpendFacts(clauses) {
+  return clauses.filter(clause => {
+    const quote = clause.quote;
+    return /\b(?:lounge|airport lounge|priority pass)\b/i.test(quote) &&
+      /(?:₹\s*|Rs\.?\s*|INR\s*)[\d,]+|\b\d+(?:\.\d+)?\s*(?:lakh|lakhs|k)\b/i.test(quote) &&
+      /\b(?:spend|spends|spent|transaction|retail purchase|eligible purchase|calendar quarter|quarterly|per quarter|per month)\b/i.test(quote);
+  });
+}
+
+function appendUniqueSentence(existing, value) {
+  const a = String(existing || "").trim();
+  const b = String(value || "").trim();
+  if (!b || a.includes(b)) return a || null;
+  return a ? a + " " + b : b;
+}
+
+function genericUpsertBenefit(data, benefit) {
+  if (!Array.isArray(data.benefits)) data.benefits = [];
+  const index = data.benefits.findIndex(item =>
+    String(item.name || "").trim().toLowerCase() === String(benefit.name || "").trim().toLowerCase()
+  );
+  if (index < 0) {
+    data.benefits.push(benefit);
+    return data.benefits[data.benefits.length - 1];
+  }
+  const old = data.benefits[index];
+  data.benefits[index] = {
+    ...old,
+    ...benefit,
+    conditions: benefit.conditions || old.conditions || null,
+    sourceQuote: benefit.sourceQuote || old.sourceQuote || null,
+    sourceUrl: benefit.sourceUrl || old.sourceUrl || null,
+    validFrom: benefit.validFrom || old.validFrom || null,
+    validTo: benefit.validTo || old.validTo || null
+  };
+  return data.benefits[index];
+}
+
+/**
+ * Issuer-agnostic enrichment for all supported cards. Only promotes fees or
+ * eligibility conditions when an explicit matching fact is present in official
+ * source text; otherwise leaves unknown values unknown.
+ */
+export function normalizeCommonCardFacts(data, context = {}) {
+  if (!data || typeof data !== "object") return data;
+  if (!Array.isArray(data.benefits)) data.benefits = [];
+  if (!Array.isArray(data.missingItems)) data.missingItems = [];
+
+  const sections = officialSourceSections(String(context.sourceText || ""), context.sourceUrl || "");
+  if (!sections.length) return data;
+  const clauses = officialClauses(sections);
+
+  const joiningFact = explicitFeeFact(clauses, "joining");
+  const annualFact = explicitFeeFact(clauses, "annual");
+  const waiverFact = findWaiverFact(clauses);
+
+  if (joiningFact) data.joiningFee = joiningFact.amount;
+  if (annualFact) data.annualFee = annualFact.amount;
+  if (waiverFact) data.annualFeeWaiver = waiverFact.quote;
+
+  if (joiningFact || annualFact) {
+    const facts = [
+      joiningFact ? { label: "Joining fee", fact: joiningFact } : null,
+      annualFact ? { label: "Annual/renewal fee", fact: annualFact } : null
+    ].filter(Boolean);
+    const description = facts.map(({ label, fact }) =>
+      label + ": " + (fact.amount === 0 ? "₹0" : "₹" + fact.amount.toLocaleString("en-IN")) +
+      (/\b(?:plus|\+)\s*(?:applicable\s*)?tax(?:es)?\b/i.test(fact.quote) ? " plus applicable taxes" : "")
+    ).join(". ") + ".";
+    const quote = facts.map(item => item.fact.quote).join(" ");
+    genericUpsertBenefit(data, {
+      name: "Joining and annual fee",
+      description,
+      conditions: waiverFact ? waiverFact.quote : null,
+      sourceQuote: [quote, waiverFact?.quote].filter(Boolean).join(" ") || null,
+      sourceUrl: facts[0].fact.url || waiverFact?.url || null
+    });
+  }
+
+  if (waiverFact) {
+    genericUpsertBenefit(data, {
+      name: "Annual fee waiver",
+      description: "Fee-waiver eligibility is based on the spend condition stated by the issuer.",
+      conditions: waiverFact.quote,
+      sourceQuote: waiverFact.quote,
+      sourceUrl: waiverFact.url || null
+    });
+  }
+
+  for (const fact of findLoungeSpendFacts(clauses)) {
+    const international = /\b(?:international|outside India|outside the country|Priority Pass)\b/i.test(fact.quote);
+    const domestic = /\b(?:domestic|within India|inside India)\b/i.test(fact.quote);
+    const desiredName = international
+      ? "International lounge access eligibility"
+      : domestic ? "Domestic lounge access eligibility" : "Lounge access eligibility";
+    const existingIndex = data.benefits.findIndex(benefit => {
+      const fullText = [benefit.name, benefit.description, benefit.conditions, benefit.sourceQuote].filter(Boolean).join(" ");
+      if (!/\b(?:lounge|airport|priority pass)\b/i.test(fullText)) return false;
+      if (international && !/\b(?:international|outside India|Priority Pass)\b/i.test(fullText)) return false;
+      if (domestic && !/\b(?:domestic|within India|inside India)\b/i.test(fullText)) return false;
+      return true;
+    });
+    if (existingIndex >= 0) {
+      const existing = data.benefits[existingIndex];
+      existing.conditions = appendUniqueSentence(existing.conditions, fact.quote);
+      existing.sourceQuote = appendUniqueSentence(existing.sourceQuote, fact.quote);
+      existing.sourceUrl = existing.sourceUrl || fact.url || null;
+    } else {
+      genericUpsertBenefit(data, {
+        name: desiredName,
+        description: "Lounge eligibility is subject to the issuer's published spend and transaction conditions.",
+        conditions: fact.quote,
+        sourceQuote: fact.quote,
+        sourceUrl: fact.url || null
+      });
+    }
+  }
+
+  return data;
+}
+
 export function normalizeHdfcRegaliaExtraction(data, context = {}) {
   if (!data || typeof data !== "object") return data;
   const issuer = String(context.issuer || data.issuer || "").toLowerCase();
