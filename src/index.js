@@ -319,7 +319,7 @@ async function autoExtractCard(request, env) {
   // HDFC Regalia details are spread across a landing page, a feature page and
   // dated terms PDFs. Reading just the landing page often captures benefits but
   // misses the numeric baseline earning rate, so merge several official sources.
-  const maxSources = isHdfcRegalia ? 4 : 3;
+  const maxSources = isHdfcRegalia ? 5 : 3;
   for (const candidate of candidates.slice(0, 10)) {
     if (selectedSources.length >= maxSources) break;
     try {
