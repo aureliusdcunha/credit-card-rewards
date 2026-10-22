@@ -50,6 +50,12 @@
     document.getElementById("approve-draft").disabled = false;
     document.getElementById("approve-draft").textContent = "Publish reviewed rules";
     document.getElementById("reject-draft").disabled = false;
+    const statusPill = document.getElementById("draft-status-pill");
+    const draftStatus = String(draft.status || "needs_review").toLowerCase();
+    if (statusPill) {
+      statusPill.className = "pill " + (draftStatus === "approved" ? "pill-green" : draftStatus === "rejected" ? "pill-gray" : "pill-amber");
+      statusPill.textContent = draftStatus === "approved" ? "Approved" : draftStatus === "rejected" ? "Rejected" : "Needs review";
+    }
     draftMeta.innerHTML = `<div><strong>Draft ID:</strong> ${C.escapeHtml(draft.id)}</div><div><strong>Source:</strong> <a href="${C.escapeHtml(currentSourceUrl)}" target="_blank" rel="noopener noreferrer">${C.escapeHtml(currentSourceTitle)} ↗</a></div><div><strong>Created:</strong> ${C.escapeHtml(draft.createdAt || "Not available")} · <strong>Status:</strong> <span id="draft-status">${C.escapeHtml(draft.status || "needs_review")}</span></div>${draft.sourceExcerpt ? `<details><summary>Show source excerpt</summary><p>${C.escapeHtml(draft.sourceExcerpt)}</p></details>` : ""}`;
     reviewMessage.textContent = "Review all rates, source quotes, exclusions and effective dates. Publishing will affect calculations for this card.";
     draftPanel.hidden = false;
@@ -189,6 +195,11 @@
       successBox.textContent = response.message;
       const status = document.getElementById("draft-status");
       if (status) status.textContent = "approved";
+      const statusPill = document.getElementById("draft-status-pill");
+      if (statusPill) {
+        statusPill.className = "pill pill-green";
+        statusPill.textContent = "Approved";
+      }
       draftJson.readOnly = true;
       document.getElementById("reject-draft").disabled = true;
       button.textContent = "Published";
