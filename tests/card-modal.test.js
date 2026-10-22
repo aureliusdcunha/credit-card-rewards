@@ -163,3 +163,25 @@ test("Restrictions tab surfaces lounge-related spend thresholds stored as benefi
   assert.match(html, /https:\/\/issuer\.example\/lounge\.pdf/);
   assert.match(html, /From 2026-07-01/);
 });
+
+
+test("Restrictions tab shows condition-bearing benefits for any issuer, not only lounge-specific benefits", () => {
+  const card = {
+    issuer: "Axis Bank",
+    name: "Horizon Credit Card",
+    benefits: [{
+      name: "Milestone voucher",
+      description: "Voucher benefit on eligible annual spend",
+      conditions: "Spend ₹2,50,000 within the card anniversary year to receive the voucher.",
+      sourceQuote: "Voucher on annual spends of ₹2,50,000",
+      sourceUrl: "https://issuer.example/horizon/terms"
+    }],
+    exclusions: [],
+    rules: []
+  };
+  const html = Modal.renderTab(card, "restrictions");
+  assert.match(html, /Benefit eligibility conditions/);
+  assert.match(html, /Milestone voucher/);
+  assert.match(html, /₹2,50,000/);
+  assert.match(html, /https:\/\/issuer\.example\/horizon\/terms/);
+});
