@@ -53,3 +53,13 @@ test("all pages reference the current release and cache-busted assets", async ()
   assert.ok(layout.includes(`const APP_VERSION = "${APP_VERSION}";`));
   assert.ok(layout.includes(`const APP_BUILD = "${APP_BUILD}";`));
 });
+
+
+test("data terminal keeps selected text readable on dark surfaces", async () => {
+  const css = await read("../public/css/app.css");
+  assert.match(css, /::selection,\s*\n?::-moz-selection\s*\{[^}]*color:\s*#f2fffa\s*!important/s);
+  assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]:hover\s*\{[^}]*color:\s*#e8fff8\s*!important/s);
+  assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]\[aria-selected="true"\]\s*\{[^}]*background:\s*#193b36\s*!important/s);
+  assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]\[aria-selected="true"\]:hover\s*\{[^}]*color:\s*#e6fff7\s*!important/s);
+  assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]:focus-visible\s*\{[^}]*outline:\s*2px solid #70e0bc/s);
+});
