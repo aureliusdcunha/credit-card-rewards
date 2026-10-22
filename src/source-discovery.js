@@ -177,19 +177,31 @@ function knownOfficialFallbacks(issuer, cardName) {
         url: "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card",
         title: "HDFC Bank Regalia Gold Credit Card — current benefits and reward rates",
         domain: "www.hdfc.bank.in",
-        score: 140
+        score: 145
       },
       {
         url: "https://v.hdfc.bank.in/regalia-gold/features.html",
         title: "HDFC Bank Regalia Gold — rewards, dining and travel features",
         domain: "v.hdfc.bank.in",
-        score: 138
+        score: 143
+      },
+      {
+        url: "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card/fees-and-charges",
+        title: "HDFC Bank Regalia Gold — joining fee, renewal fee and waiver conditions",
+        domain: "www.hdfc.bank.in",
+        score: 142
+      },
+      {
+        url: "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/lounge-t-and-cs-and-list-Regalia-Gold.pdf",
+        title: "HDFC Bank Regalia Gold — domestic lounge access terms effective 1 July 2026",
+        domain: "www.hdfc.bank.in",
+        score: 141
       },
       {
         url: "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-travel-edge-tnc.pdf",
         title: "HDFC Bank Regalia Gold — reward changes effective 15 May 2026 and Travel Edge terms",
         domain: "www.hdfc.bank.in",
-        score: 136
+        score: 140
       },
       {
         url: "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/terms-and-conditions.pdf",
