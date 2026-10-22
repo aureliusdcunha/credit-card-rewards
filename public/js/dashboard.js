@@ -3,6 +3,44 @@
   try {
     const [health, response] = await Promise.all([C.request("/health"), C.request("/cards")]);
     const cards = response.cards || [];
+
+    // Show a catalogue warning only when runtime health/card status warrants it.
+    const banner = document.getElementById("catalogue-data-warning");
+    const warning = C.catalogueDataWarning(health, cards);
+    if (banner) {
+      banner.replaceChildren();
+      if (!warning) {
+        banner.hidden = true;
+      } else {
+        banner.hidden = false;
+        banner.className = "notice notice-" + warning.tone + " space-top catalogue-data-warning";
+        const icon = document.createElement("span");
+        icon.className = "notice-icon";
+        icon.textContent = warning.tone === "warning" ? "!" : "i";
+        const copy = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = warning.title;
+        const message = document.createElement("p");
+        message.textContent = warning.message;
+        copy.append(title, message);
+        banner.append(icon, copy);
+      }
+    }
+
+    const reviewCount = cards.filter(card =>
+      ["needs_review", "no_verified_rules", "demo"].includes(String(card.reviewStatus || "")) ||
+      (card.rules || []).some(rule => ["demo", "needs_review"].includes(String(rule.status || "")))
+    ).length;
+    const sectionNote = document.getElementById("catalogue-section-note");
+    if (sectionNote) {
+      sectionNote.textContent = health.mode !== "d1"
+        ? "Demo catalogue · example rules only"
+        : reviewCount
+          ? reviewCount + " card record(s) need review"
+          : "Production catalogue · no provisional rules detected";
+    }
+    const featuredTitle = document.getElementById("featured-cards-title");
+    if (featuredTitle) featuredTitle.textContent = health.mode !== "d1" ? "Cards we're setting up" : "Cards in your catalogue";
     document.getElementById("stat-cards").textContent = cards.length;
     document.getElementById("stat-verified").textContent = cards.filter(card => card.reviewStatus === "verified").length;
     document.getElementById("stat-rules").textContent = cards.reduce((count, card) => count + (card.rules || []).length, 0);
