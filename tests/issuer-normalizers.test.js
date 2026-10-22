@@ -478,3 +478,49 @@ test("does not create accelerated SimplySAVE rules if the monthly cap cannot be 
   assert.ok(draft.benefits.some(item => /accelerated.*needs complete verification/i.test(item.name)));
   assert.match(draft.missingItems.join(" "), /monthly cap/i);
 });
+
+
+test("extracts combined Regalia Gold joining/renewal membership fee as both ₹2,500 fee fields", () => {
+  const feePage = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: HDFC Bank Regalia Gold — Fees and Charges",
+    "URL: " + feePage,
+    "SOURCE TEXT START",
+    "Joining / Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
+    "Spend ₹4,00,000 within the preceding 12 billing cycles of your anniversary year to waive the renewal fee for the following year.",
+    "SOURCE TEXT END"
+  ].join("\\n");
+  const draft = {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    network: null,
+    rewardCurrency: "Reward Points",
+    annualFee: null,
+    joiningFee: null,
+    annualFeeWaiver: null,
+    rules: [],
+    benefits: [],
+    exclusions: [],
+    missingItems: []
+  };
+
+  normalizeHdfcRegaliaExtraction(draft, {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    sourceText,
+    sourceUrl: feePage
+  });
+
+  assert.equal(draft.joiningFee, 2500);
+  assert.equal(draft.annualFee, 2500);
+  assert.match(draft.annualFeeWaiver, /₹4,00,000/);
+  assert.match(draft.annualFeeWaiver, /12 billing cycles/i);
+
+  const feeBenefit = draft.benefits.find(item => item.name === "Joining and annual fee");
+  assert.ok(feeBenefit);
+  assert.match(feeBenefit.description, /₹2,500 each, plus applicable taxes/i);
+  assert.match(feeBenefit.sourceQuote, /Joining \/ Renewal Membership Fee of Rs\. 2500 \+ Applicable Taxes/i);
+  assert.match(feeBenefit.sourceQuote, /Spend ₹4,00,000/);
+  assert.equal(feeBenefit.sourceUrl, feePage);
+});
