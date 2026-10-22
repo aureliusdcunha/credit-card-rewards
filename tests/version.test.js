@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import worker from "../src/index.js";
 import { APP_VERSION, APP_BUILD } from "../src/version.js";
 import { DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_FALLBACK_MODELS } from "../src/model-provider.js";
@@ -41,4 +42,11 @@ test("health endpoint reports Gemini as the extraction provider without revealin
   assert.equal(health.pdfConversionProvider, "gemini");
   assert.deepEqual(health.aiFallbackModels, DEFAULT_GEMINI_FALLBACK_MODELS);
   assert.equal(JSON.stringify(health).includes("do-not-expose-this-key"), false);
+});
+
+
+test("navigation version capsule stays aligned with backend release metadata", async () => {
+  const layout = await readFile(new URL("../public/js/layout.js", import.meta.url), "utf8");
+  assert.ok(layout.includes(`const APP_VERSION = "${APP_VERSION}";`), "layout capsule version must match backend version");
+  assert.ok(layout.includes(`const APP_BUILD = "${APP_BUILD}";`), "layout capsule build must match backend build");
 });
