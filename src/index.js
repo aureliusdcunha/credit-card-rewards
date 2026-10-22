@@ -1,6 +1,6 @@
 import { getCards, getDrafts } from "./db.js";
 import { calculateRewards } from "./rules-engine.js";
-import { discoverOfficialUrls } from "./source-discovery.js";
+import { discoverOfficialUrls, validateOfficialUrl } from "./source-discovery.js";
 import { normalizeDraftRewardUnits } from "./reward-units.js";
 import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts } from "./issuer-normalizers.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
@@ -12,13 +12,6 @@ const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_SOURCE_CHARS = 45000;
 const MAX_HTML_BYTES = 1500000;
 const MAX_PDF_BYTES = 8000000;
-const OFFICIAL_DOMAINS = [
-  "axisbank.com", "axis.bank.in", "hdfcbank.com", "hdfc.bank.in", "icicibank.com", "sbicard.com", "sbi.co.in",
-  "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
-  "hsbc.co.in", "icici.bank.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
-  "federalbank.co.in", "aubank.in", "au.bank.in", "standardchartered.co.in"
-];
-
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -60,20 +53,7 @@ function normalizeText(value) {
     .replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n")
     .trim();
 }
-function hostIsAllowed(hostname) {
-  const host = hostname.toLowerCase().replace(/\.$/, "");
-  return OFFICIAL_DOMAINS.some(domain => host === domain || host.endsWith(`.${domain}`));
-}
-function validateOfficialUrl(raw) {
-  let url;
-  try { url = new URL(raw); } catch { throw new Error("Enter a valid official bank URL."); }
-  if (url.protocol !== "https:") throw new Error("Only HTTPS source URLs are allowed.");
-  if (url.username || url.password) throw new Error("URLs containing usernames or passwords are not allowed.");
-  if (!hostIsAllowed(url.hostname)) {
-    throw new Error(`This domain is not in the issuer allow-list. Allowed issuers include: ${OFFICIAL_DOMAINS.slice(0, 8).join(", ")} and others configured in the Worker.`);
-  }
-  return url;
-}
+
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";

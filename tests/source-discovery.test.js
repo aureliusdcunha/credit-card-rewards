@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import worker from "../src/index.js";
 import { discoverOfficialUrls, issuerDomainFor, validateOfficialUrl } from "../src/source-discovery.js";
 
 test("Standard Chartered resolves to its current official India domain", () => {
@@ -89,6 +90,71 @@ test("discovers a card on the .bank.in namespace when the issuer has no hardcode
     assert.equal(results[0].url, "https://www.examplebank.bank.in/credit-cards/example-rewards-credit-card");
     assert.ok(queries.some(query => query.includes("site:bank.in")));
     assert.ok(queries.some(query => query.includes("Example Bank")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("auto-extraction can read a discovered .bank.in URL using the same validator as search", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedCardUrls = [];
+  const validDraft = {
+    issuer: "Kotak Mahindra Bank",
+    cardName: "Rewards Credit Card",
+    network: null,
+    rewardCurrency: "Points",
+    annualFee: null,
+    joiningFee: null,
+    annualFeeWaiver: null,
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [],
+    missingItems: ["Verify reward rate from current card terms."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    if (url.hostname === "html.duckduckgo.com") {
+      return new Response(
+        '<html><a class="result__a" href="https://www.kotak.bank.in/credit-cards/rewards-credit-card">Kotak Rewards Credit Card official details and terms</a></html>',
+        { headers: { "content-type": "text/html" } }
+      );
+    }
+    if (url.hostname === "www.kotak.bank.in" && url.pathname === "/credit-cards/rewards-credit-card") {
+      fetchedCardUrls.push(url.toString());
+      return new Response(
+        "<html><head><title>Kotak Rewards Credit Card Official Terms</title></head><body><main>" +
+          "Official Kotak card terms and conditions. " +
+          "Please review eligibility, reward programme conditions, fees, limits and exclusions. ".repeat(4) +
+          "</main></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "Kotak Mahindra Bank", cardName: "Rewards Credit Card" })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: { async run() { return { response: JSON.stringify(validDraft) }; } }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.extractionMode, "auto-discovery");
+    assert.ok(fetchedCardUrls.some(url => url.includes("kotak.bank.in")));
+    assert.equal(body.discovery.selectedSource, "https://www.kotak.bank.in/credit-cards/rewards-credit-card");
   } finally {
     globalThis.fetch = originalFetch;
   }
