@@ -10,7 +10,12 @@
     let data;
     try { data = await response.json(); } catch { data = { error: `Unexpected response (${response.status}).` }; }
     if (!response.ok) {
-      const error = new Error(data.error || `Request failed (${response.status}).`);
+      const messageParts = [data.error || `Request failed (${response.status}).`];
+      if (data.stage) messageParts.push("Stage: " + data.stage);
+      if (data.details) messageParts.push("Details: " + data.details);
+      if (data.nextStep) messageParts.push(data.nextStep);
+      if (data.diagnosticId) messageParts.push("Diagnostic ID: " + data.diagnosticId);
+      const error = new Error(messageParts.join(" "));
       error.status = response.status; error.data = data; throw error;
     }
     return data;

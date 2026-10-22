@@ -1,6 +1,6 @@
 # Credit Card Rewards Intelligence (Cloudflare)
 
-A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction uses a Workers AI binding.
+A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
 ## What's included
 
@@ -21,6 +21,10 @@ A multi-page prototype for Indian credit-card rewards. It deliberately uses **on
 The initial card records are **demo/provisional only** so the pages can be tested before the rules database is fully populated. They are not a complete or verified representation of the banks' current terms. The calculator will warn where the selected rule is provisional and avoids applying an unverified generic rule to an unreviewed named category. It does not claim a rupee value for points because redemption routes have not yet been configured.
 
 AI extraction creates a `needs_review` draft. It never publishes rules on its own. Before publishing, review the exact card variant, source quote, earn rate, category, exclusions/MCCs, caps, minimum transaction amount, rounding logic and effective dates. The rule engine is deterministic; AI is only used to prepare a source-grounded draft.
+
+## AI provider setup
+
+To use the Google Gemini free tier for source extraction, store GEMINI_API_KEY as a Cloudflare Worker secret. See [AI-PROVIDER-SETUP.md](./docs/AI-PROVIDER-SETUP.md) for setup, data-handling caveats, quota errors, and the production D1 migration check.
 
 ## Deploy to Cloudflare
 

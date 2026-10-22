@@ -24,3 +24,19 @@ test("cards API includes release metadata for support and version verification",
   assert.equal(payload.build, APP_BUILD);
   assert.ok(Array.isArray(payload.cards));
 });
+
+
+test("health endpoint reports Gemini as the extraction provider without revealing the secret", async () => {
+  const response = await worker.fetch(new Request("https://app.example/api/health"), {
+    GEMINI_API_KEY: "do-not-expose-this-key",
+    ADMIN_TOKEN: "test-admin-token"
+  });
+  assert.equal(response.status, 200);
+  const health = await response.json();
+  assert.equal(health.aiConfigured, true);
+  assert.equal(health.aiProvider, "gemini");
+  assert.equal(health.aiModel, "gemini-3.5-flash");
+  assert.equal(health.pdfConversionConfigured, true);
+  assert.equal(health.pdfConversionProvider, "gemini");
+  assert.equal(JSON.stringify(health).includes("do-not-expose-this-key"), false);
+});
