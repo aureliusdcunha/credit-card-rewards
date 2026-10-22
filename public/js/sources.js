@@ -178,9 +178,28 @@
         data.stage ? "Stage: " + data.stage : "",
         data.details ? "Details: " + data.details : "",
         data.diagnosticId ? "Diagnostic ID: " + data.diagnosticId : "",
+        data.nextStep || "",
         data.timingMs ? formatTimingSummary(data.timingMs).trim() : ""
       ].filter(Boolean);
       discoverError.textContent = [error.message, ...diagnostics].join(" ");
+      if (Array.isArray(data.sourceCandidates) && data.sourceCandidates.length) {
+        const list = document.createElement("span");
+        list.className = "source-candidate-links";
+        list.append(document.createTextNode(" Official source candidates: "));
+        data.sourceCandidates.slice(0, 8).forEach((candidate, index) => {
+          let url;
+          try { url = new URL(String(candidate.url || "")); } catch { return; }
+          if (url.protocol !== "https:") return;
+          if (index) list.append(document.createTextNode(" · "));
+          const link = document.createElement("a");
+          link.href = url.toString();
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = String(candidate.title || url.hostname).slice(0, 140);
+          list.append(link);
+        });
+        discoverError.append(document.createElement("br"), list);
+      }
     } finally {
       discoverButton.disabled = false;
       discoverButton.innerHTML = 'Find official sources &amp; extract details <span>→</span>';

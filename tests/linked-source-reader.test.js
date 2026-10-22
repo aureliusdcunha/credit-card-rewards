@@ -180,3 +180,81 @@ test("rejects a supplied official URL that belongs to a different issuer", async
   const body = await response.json();
   assert.match(body.error, /domain does not match Yes Bank/);
 });
+
+
+test("falls back to issuer-wide official source discovery when a supplied product page is JavaScript-only", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  const startUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card";
+  const termsUrl = "https://www.yes.bank.in/content/uni-key-fact-statement.pdf";
+  const termsText = "Official YES BANK UNI Credit Card Key Fact Statement and terms. " +
+    "Annual fee details, finance charges, rewards, eligible transactions, exclusions, " +
+    "fuel surcharge waiver and important cardholder conditions. ".repeat(5);
+  const validDraft = {
+    issuer: "Yes Bank", cardName: "Uni", network: null, rewardCurrency: "Uni Coins",
+    annualFee: 499, joiningFee: 0, annualFeeWaiver: null, effectiveDate: null,
+    rules: [], exclusions: [], benefits: [],
+    missingItems: ["Confirm the current cashback earning rate from a dedicated rewards document."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+
+    if (url.hostname === "html.duckduckgo.com") {
+      const query = url.searchParams.get("q") || "";
+      if (query.includes("site:yes.bank.in")) {
+        return new Response(
+          '<html><a class="result__a" href="' + termsUrl + '">YES BANK UNI Credit Card Key Fact Statement PDF</a></html>',
+          { headers: { "content-type": "text/html" } }
+        );
+      }
+      return new Response("<html></html>", { headers: { "content-type": "text/html" } });
+    }
+
+    if (url.toString() === startUrl) {
+      return new Response(
+        '<html><head><title>UNI Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><script src="/assets/uni-app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === termsUrl) {
+      return new Response(new Uint8Array([37, 80, 68, 70, 45, 49]), {
+        headers: { "content-type": "application/pdf" }
+      });
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "Yes Bank", cardName: "Uni", sourceUrl: startUrl })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async toMarkdown() { return { format: "markdown", data: termsText }; },
+        async run() { return { response: JSON.stringify(validDraft) }; }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.suppliedSourceUrl, true);
+    assert.equal(body.discovery.selectedSource, termsUrl);
+    assert.ok(body.discovery.candidatesFound >= 2);
+    assert.ok(fetchedUrls.includes(startUrl));
+    assert.ok(fetchedUrls.includes(termsUrl));
+    assert.ok(fetchedUrls.some(url => url.includes("html.duckduckgo.com")));
+    assert.match(body.sourceExcerpt, /Official YES BANK UNI Credit Card Key Fact Statement/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

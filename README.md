@@ -2,6 +2,13 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.5 — 23 October 2026
+
+- Treat a supplied official card URL as the preferred starting point, not the only source. If it yields no readable terms, continue with related official links and normal issuer-wide source discovery.
+- Retry relevant official HTML/PDF candidates found through discovery, while validating every candidate against the selected issuer's configured domain.
+- Show actionable next steps and clickable official source candidates when no readable source can be extracted.
+- Updates the package, Worker metadata, navigation version pill, every page footer, all page asset cache-busters and source discovery user-agent to **0.6.5 / build 20261023.03**.
+
 ## Release 0.6.4 — 23 October 2026
 
 - Adds an optional official card/terms URL to automatic Source Review. Supplying one skips search discovery and uses that URL as the starting source.

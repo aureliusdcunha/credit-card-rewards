@@ -590,13 +590,100 @@ async function autoExtractCardWithTrace(request, env, trace) {
     if (!isHdfcRegalia && selectedSources.length > sourcesBeforePdf) break;
   }
   trace.timings.sourceReadMs = Date.now() - sourceReadStartedAt;
+
+  // A supplied product URL is a preferred starting point, not a single-source dead end.
+  // If its server-rendered HTML and linked terms did not yield readable text, try
+  // relevant same-issuer links first, then fall back to normal official-source search.
+  let fallbackRelatedCandidates = [];
+  if (!selectedSources.length && suppliedSourceUrl) {
+    const relatedCandidates = htmlOutcomes.flatMap(outcome =>
+      (outcome.relatedUrls || []).map(item => ({
+        url: item.url,
+        title: item.title || "Related official issuer terms",
+        domain: (() => { try { return new URL(item.url).hostname; } catch { return ""; } })(),
+        score: Number(item.score || 0) + 500,
+        relatedToSuppliedUrl: true
+      }))
+    );
+    const seenCandidates = new Set(candidates.map(candidate => candidate.url));
+    const safeRelatedCandidates = relatedCandidates.filter(candidate => {
+      if (!candidate.url || seenCandidates.has(candidate.url)) return false;
+      try {
+        validateIssuerOfficialUrl(candidate.url, issuer, cardName);
+        seenCandidates.add(candidate.url);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    fallbackRelatedCandidates = safeRelatedCandidates;
+    candidates = [...candidates, ...safeRelatedCandidates];
+
+    const candidateIsPdf = candidate => /\.pdf(?:[?#]|$)/i.test(String(candidate.url || "")) ||
+      /\bpdf\b/i.test(String(candidate.title || ""));
+    const readFallbackCandidates = async fallbackCandidates => {
+      const html = fallbackCandidates.filter(candidate => !candidateIsPdf(candidate)).slice(0, 4);
+      const pdf = fallbackCandidates.filter(candidateIsPdf)
+        .sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 3);
+      trace.stage = "read related official issuer pages";
+      const relatedOutcomes = await Promise.all(html.map(readCandidate));
+      mergeReadOutcomes(relatedOutcomes);
+      fallbackRelatedCandidates.push(...relatedOutcomes.flatMap(outcome => outcome.relatedUrls || []));
+      let pdfIndex = 0;
+      while (selectedSources.length < maxSources && pdfIndex < pdf.length) {
+        trace.stage = "read discovered official terms PDF fallback " + (pdfIndex + 1);
+        const outcome = await readCandidate(pdf[pdfIndex++]);
+        mergeReadOutcomes([outcome]);
+      }
+    };
+
+    if (safeRelatedCandidates.length) {
+      const relatedStartedAt = Date.now();
+      await readFallbackCandidates(safeRelatedCandidates);
+      trace.timings.sourceReadMs = (trace.timings.sourceReadMs || 0) + (Date.now() - relatedStartedAt);
+    }
+
+    if (!selectedSources.length) {
+      trace.stage = "fallback official-source search";
+      const fallbackDiscoveryStartedAt = Date.now();
+      try {
+        const discovered = await discoverOfficialUrls(issuer, cardName);
+        const discoveredUrls = new Set(candidates.map(candidate => candidate.url));
+        const safeDiscovered = discovered.filter(candidate => {
+          if (!candidate.url || discoveredUrls.has(candidate.url)) return false;
+          try {
+            validateIssuerOfficialUrl(candidate.url, issuer, cardName);
+            discoveredUrls.add(candidate.url);
+            return true;
+          } catch {
+            return false;
+          }
+        });
+        candidates = [...candidates, ...safeDiscovered];
+        trace.timings.discoveryMs = (trace.timings.discoveryMs || 0) + (Date.now() - fallbackDiscoveryStartedAt);
+
+        if (safeDiscovered.length) {
+          const fallbackReadStartedAt = Date.now();
+          await readFallbackCandidates(safeDiscovered);
+          trace.timings.sourceReadMs = (trace.timings.sourceReadMs || 0) + (Date.now() - fallbackReadStartedAt);
+        }
+      } catch (error) {
+        trace.timings.discoveryMs = (trace.timings.discoveryMs || 0) + (Date.now() - fallbackDiscoveryStartedAt);
+        sourceErrors.push("Fallback official-source search: " + String(error?.message || error).slice(0, 180));
+      }
+    }
+  }
+
   if (!selectedSources.length) {
     const details = sourceErrors.length
       ? " Details: " + sourceErrors.slice(0, 3).join(" | ")
       : " The candidates returned too little readable text.";
-    const linkedCandidates = htmlOutcomes.flatMap(outcome =>
-      (outcome.relatedUrls || []).map(item => ({ title: item.title, url: item.url, score: item.score || 0 }))
-    );
+    const linkedCandidates = [
+      ...htmlOutcomes.flatMap(outcome =>
+        (outcome.relatedUrls || []).map(item => ({ title: item.title, url: item.url, score: item.score || 0 }))
+      ),
+      ...fallbackRelatedCandidates.map(item => ({ title: item.title || "Related official issuer source", url: item.url, score: item.score || 0 }))
+    ];
     const allDiagnosticCandidates = [...candidates, ...linkedCandidates].filter((item, index, all) =>
       all.findIndex(other => other.url === item.url) === index
     );
