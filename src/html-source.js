@@ -107,7 +107,9 @@ export function extractOfficialHtml(html, baseUrl, cardName = "") {
   const bodyText = textFromMarkup(bodyMatch?.[1] || withoutNoise);
   const mainText = mainBlocks.sort((a, b) => b.length - a.length)[0] || "";
   const contentText = mainText.length >= 100 ? mainText : bodyText;
-  const parts = [title, description, jsonText, contentText].filter(Boolean);
+  const meaningfulText = [jsonText, contentText].filter(Boolean).join("\n").trim();
+  const readableTextLength = meaningfulText.length;
+  const parts = [title, description, meaningfulText].filter(Boolean);
   const text = [...new Set(parts)].join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 
   const links = [];
@@ -145,7 +147,8 @@ export function extractOfficialHtml(html, baseUrl, cardName = "") {
     title: title.slice(0, 240),
     description,
     text,
+    readableTextLength,
     relatedUrls: links.slice(0, 12),
-    javascriptHeavy: text.length < 100 && /<script\b/i.test(raw)
+    javascriptHeavy: readableTextLength < 100 && /<script\b/i.test(raw)
   };
 }
