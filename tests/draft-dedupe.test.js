@@ -41,3 +41,22 @@ test("does not combine different card variants from the same issuer", () => {
   ];
   assert.deepEqual(deduplicatePendingDraftRows(rows).map(row => row.id), ["sapphiro", "coral"]);
 });
+
+
+test("getDrafts exposes only one review item for repeated copies of the same card", async () => {
+  const rows = [
+    { id: "latest", card_id: null, source_url: "https://campaigns.icicibank.com/credit-card/alumni/index.html", source_title: "ICICI Bank", source_excerpt: "", extracted_json: JSON.stringify({ issuer: "ICICI Bank", cardName: "Sapphiro Credit Card" }), status: "needs_review", created_at: "2026-10-22T04:00:00Z" },
+    { id: "older-one", card_id: null, source_url: "https://campaigns.icicibank.com/credit-card/alumni/index.html", source_title: "ICICI Bank", source_excerpt: "", extracted_json: JSON.stringify({ issuer: "ICICI Bank", cardName: "Sapphiro Credit Card" }), status: "needs_review", created_at: "2026-10-22T03:59:00Z" },
+    { id: "older-two", card_id: null, source_url: "https://campaigns.icicibank.com/credit-card/alumni/index.html?source=retry", source_title: "ICICI Bank", source_excerpt: "", extracted_json: JSON.stringify({ issuer: "ICICI Bank", cardName: "Sapphiro Credit Card" }), status: "needs_review", created_at: "2026-10-22T03:58:00Z" }
+  ];
+  const env = {
+    DB: {
+      prepare: () => ({
+        all: async () => ({ results: rows })
+      })
+    }
+  };
+  const drafts = await getDrafts(env);
+  assert.deepEqual(drafts.map(draft => draft.id), ["latest"]);
+  assert.equal(drafts[0].status, "needs_review");
+});
