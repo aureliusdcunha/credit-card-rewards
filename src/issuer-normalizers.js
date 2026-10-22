@@ -84,6 +84,11 @@ export function normalizeHdfcRegaliaExtraction(data, context = {}) {
   for (const rule of data.rules) {
     const detail = String(rule.sourceQuote || "") + " " + String(rule.notes || "");
     const sourceQuote = String(rule.sourceQuote || "");
+    // A base-point continuation sentence can mention "5X" as context, but is not
+    // itself an accelerated earning rule. Handle that prose before testing the 5X marker.
+    if (BASE_CONTINUATION_PATTERN.test(detail) && !BASE_RATE_PATTERN.test(sourceQuote)) {
+      continue;
+    }
     if (ACCELERATED_PATTERN.test(sourceQuote) || (!sourceQuote && ACCELERATED_PATTERN.test(detail))) {
       addBenefitFromRule(
         data,
@@ -93,9 +98,6 @@ export function normalizeHdfcRegaliaExtraction(data, context = {}) {
         "The issuer source describes 5X rewards at selected merchants. The extracted per-rupee values were not retained as a calculator rule because the multiplier, base rate and cap need to be interpreted together."
       );
       movedAccelerated = true;
-      continue;
-    }
-    if (BASE_CONTINUATION_PATTERN.test(detail) && !BASE_RATE_PATTERN.test(sourceQuote)) {
       continue;
     }
     if (BASE_RATE_PATTERN.test(sourceQuote)) {
