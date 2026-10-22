@@ -102,7 +102,7 @@ test("publishes reviewed card details with no complete earning rule and marks a 
   const ruleRetirement = db.history.batches[0].find(item => /UPDATE card_rules SET status/.test(item.sql));
   assert.match(ruleRetirement.sql, /status = 'demo'/);
   assert.doesNotMatch(ruleRetirement.sql, /status IN \('approved','demo'\)/);
-  assert.ok(db.history.runs.some(item => /INSERT INTO card_benefits/.test(item.sql)), "reviewed benefit details should be saved");
+  assert.ok(db.history.batches.flat().some(item => /INSERT INTO card_benefits/.test(item.sql)), "reviewed benefit details should be saved");
 });
 
 test("does not retire existing approved earning rules when an update draft has no new complete rule", async () => {
