@@ -128,3 +128,11 @@ test("keeps complete earning rules while isolating another incomplete rule", () 
   assert.equal(draft.benefits.length, 1);
   assert.equal(draft.missingItems.length, 1);
 });
+
+
+test("supports SimplySAVE accelerated spending categories in the canonical category list", () => {
+  assert.equal(normalizeCategory("Movies"), "movies");
+  assert.equal(normalizeCategory("Departmental Stores"), "departmental_stores");
+  assert.equal(CATEGORIES.includes("movies"), true);
+  assert.equal(CATEGORIES.includes("departmental_stores"), true);
+});
