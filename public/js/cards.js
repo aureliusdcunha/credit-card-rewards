@@ -16,6 +16,7 @@
   const modalPanel = document.getElementById("card-modal-panel");
   const modalStatus = document.getElementById("card-modal-review-status");
   const modalClose = document.getElementById("card-modal-close");
+  const sourceReviewLink = document.getElementById("open-source-review-link");
   const modalTabs = [...document.querySelectorAll("[data-modal-tab]")];
   let activeModalCard = null;
   let activeModalTab = "benefits";
@@ -71,6 +72,15 @@
     modalSubtitle.textContent = [card.issuer, card.rewardCurrency || "Rewards", card.network || "Network not recorded"].filter(Boolean).join(" · ");
     modalStatus.innerHTML = C.statusPill(card.reviewStatus);
     renderCardSummary(card);
+    if (sourceReviewLink) {
+      const params = new URLSearchParams({
+        issuer: String(card.issuer || ""),
+        cardName: String(card.name || ""),
+        cardId: String(card.id || "")
+      });
+      sourceReviewLink.href = "/sources.html?" + params.toString();
+      sourceReviewLink.setAttribute("aria-label", "Open Source Review for " + [card.issuer, card.name].filter(Boolean).join(" "));
+    }
     modal.hidden = false;
     document.body.classList.add("card-modal-open");
     selectModalTab("benefits");
