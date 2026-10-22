@@ -132,9 +132,9 @@
       }).join("");
       html += '</div>';
     }
-    html += '<h3 class="modal-subsection-title">Benefit eligibility and spend thresholds</h3>';
+    html += '<h3 class="modal-subsection-title">Benefit eligibility conditions</h3>';
     if (!eligibilityBenefits.length) {
-      html += '<p class="modal-muted-note">No lounge or benefit-specific spend thresholds are recorded. This does not mean the issuer has no such conditions; check the current official card terms.</p>';
+      html += '<p class="modal-muted-note">No benefit-specific eligibility conditions are recorded. This does not mean the issuer has no conditions; check the current official card terms.</p>';
     } else {
       html += '<div class="modal-item-list">';
       html += eligibilityBenefits.map(benefit => {
