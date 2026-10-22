@@ -46,7 +46,7 @@ test("all pages reference the current release and cache-busted assets", async ()
     "../public/sources.html"
   ]) {
     const html = await read(path);
-    assert.ok(html.includes("app.css?v=0.5.2.0"), path + " needs the terminal stylesheet cache key");
+    assert.ok(html.includes("app.css?v=0.5.3.0"), path + " needs the terminal stylesheet cache key");
     assert.ok(html.includes(`v${APP_VERSION} · build ${APP_BUILD}`), path + " needs current release metadata");
   }
   const layout = await read("../public/js/layout.js");
@@ -62,4 +62,14 @@ test("data terminal keeps selected text readable on dark surfaces", async () => 
   assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]\[aria-selected="true"\]\s*\{[^}]*background:\s*#193b36\s*!important/s);
   assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]\[aria-selected="true"\]:hover\s*\{[^}]*color:\s*#e6fff7\s*!important/s);
   assert.match(css, /\.card-modal-tabs\s+\[role="tab"\]:focus-visible,\s*\.card-modal-close:focus-visible\s*\{[^}]*outline:\s*2px solid #70e0bc/s);
+});
+
+
+test("calculator and comparison selectors include SimplySAVE accelerated categories", async () => {
+  const calculator = await read("../public/calculator.html");
+  const compare = await read("../public/compare.html");
+  for (const html of [calculator, compare]) {
+    assert.match(html, /<option value="movies">Movies<\/option>/);
+    assert.match(html, /<option value="departmental_stores">Departmental stores<\/option>/);
+  }
 });

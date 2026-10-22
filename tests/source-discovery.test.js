@@ -251,10 +251,10 @@ test("finds official SimplySAVE source even when search engines and SBI Card sit
 
   try {
     const results = await discoverOfficialUrls("sbi", "simplysave");
-    assert.ok(queries.length > 0);
-    assert.ok(queries.some(query => query.includes("site:sbicard.com")));
+    assert.equal(queries.length, 0, "known SimplySAVE sources should bypass unavailable search providers");
     assert.equal(results[0].url, "https://www.sbicard.com/en/personal/credit-cards/simplysave-sbi-card.html");
     assert.ok(results.some(item => item.url === "https://www.sbicard.com/en/most-important-terms-and-conditions.page"));
+    assert.ok(results.some(item => item.url === "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplySAVE-TnC.pdf"), "the official reward terms PDF must be offered as a source");
   } finally {
     globalThis.fetch = originalFetch;
   }

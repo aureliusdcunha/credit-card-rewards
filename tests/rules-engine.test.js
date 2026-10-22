@@ -333,3 +333,37 @@ test("includes persisted rule metadata when no safe comparison fallback matches"
   assert.equal(result.ruleDiagnostics[0].rate, 5);
   assert.match(result.ruleDiagnostics[0].sourceQuote, /5X Reward Points/i);
 });
+
+
+test("applies SimplySAVE's shared accelerated-points monthly cap and uses the base rate for excess spend", () => {
+  const card = {
+    id: "simplysave",
+    name: "SimplySAVE SBI Card",
+    issuer: "SBI",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [
+      { category: "general", rate: 1, perAmount: 150, unit: "Reward Points", status: "approved",
+        sourceQuote: "On all other spends, earn 1 Reward Point per Rs. 150 spent." },
+      { category: "dining", rate: 10, perAmount: 150, unit: "Reward Points", status: "approved",
+        cap: { type: "points", value: 5000, period: "calendar_month", overCapCategory: "general" },
+        sourceQuote: "Earn 10X Reward Points per Rs. 150 spent on dining, movies, departmental stores and grocery." }
+    ],
+    exclusions: []
+  };
+  const result = calculateRewards({
+    card,
+    amount: 100000,
+    category: "dining",
+    purchaseDate: "2026-10-22",
+    periodPointsBefore: 4900
+  });
+
+  // Only 100 accelerated points remain in the shared cap: ₹1,500 earns those,
+  // and the remaining ₹98,500 earns the 1 point per ₹150 base rate (656 points).
+  assert.equal(result.ok, true);
+  assert.equal(result.points, 756);
+  assert.equal(result.capped, true);
+  assert.match(result.notes.join(" "), /remaining 98,500 of eligible spend uses the general rate/i);
+  assert.match(result.notes.join(" "), /shared cap categories/i);
+});
