@@ -207,9 +207,26 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   if (cap && cap.type === "points" && Number.isFinite(Number(cap.value))) {
     const remainingPoints = Math.max(0, Number(cap.value) - priorPoints);
     if (points > remainingPoints) {
-      points = remainingPoints;
-      capped = true;
-      capMessage = `Reward points were limited by the configured ${cap.period || "period"} points cap.`;
+      const overCapCategory = cap.overCapCategory || null;
+      const fallback = overCapCategory
+        ? eligibleRules.find(rule => rule.category === overCapCategory && Number(rule.perAmount) > 0 && Number(rule.rate) >= 0)
+        : null;
+      if (fallback && perAmount > 0 && rate > 0) {
+        // If a points cap explicitly defines an over-cap category, split this
+        // transaction at the spend amount that uses the remaining accelerated
+        // points and award the base rule on the remaining spend.
+        const acceleratedSpend = Math.min(eligibleAmount, (remainingPoints / rate) * perAmount);
+        const acceleratedPoints = roundRewards((acceleratedSpend / perAmount) * rate, chosen.rounding || "down");
+        const overageSpend = Math.max(0, eligibleAmount - acceleratedSpend);
+        const basePoints = roundRewards((overageSpend / Number(fallback.perAmount)) * Number(fallback.rate), fallback.rounding || "down");
+        points = Math.min(remainingPoints, acceleratedPoints) + basePoints;
+        capped = true;
+        capMessage = `The ${String(cap.period || "period").replace(/_/g, " ")} accelerated-points cap limits this rule to ${remainingPoints.toLocaleString("en-IN")} more accelerated points; the remaining ${overageSpend.toLocaleString("en-IN")} of eligible spend uses the ${overCapCategory} rate. Enter the prior points balance accumulated across the shared cap categories.`;
+      } else {
+        points = remainingPoints;
+        capped = true;
+        capMessage = `Reward points were limited by the configured ${cap.period || "period"} points cap.`;
+      }
     }
   }
   const ruleIsDemo = chosen.status !== "approved";
