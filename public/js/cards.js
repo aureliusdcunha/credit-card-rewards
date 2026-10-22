@@ -15,6 +15,7 @@
   const modalSubtitle = document.getElementById("card-modal-subtitle");
   const modalPanel = document.getElementById("card-modal-panel");
   const modalStatus = document.getElementById("card-modal-review-status");
+  const sourceReviewLink = document.getElementById("card-modal-source-review-link");
   const modalClose = document.getElementById("card-modal-close");
   const modalTabs = [...document.querySelectorAll("[data-modal-tab]")];
   let activeModalCard = null;
@@ -68,6 +69,9 @@
     modalReturnFocus = trigger || document.activeElement;
     activeModalTab = "benefits";
     modalTitle.textContent = card.name || "Card details";
+    if (sourceReviewLink && window.CRI_SOURCE_REVIEW_PREFILL) {
+      sourceReviewLink.href = window.CRI_SOURCE_REVIEW_PREFILL.buildHref(card);
+    }
     modalSubtitle.textContent = [card.issuer, card.rewardCurrency || "Rewards", card.network || "Network not recorded"].filter(Boolean).join(" · ");
     modalStatus.innerHTML = C.statusPill(card.reviewStatus);
     renderCardSummary(card);
