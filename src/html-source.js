@@ -1,9 +1,9 @@
 import { validateOfficialUrl } from "./source-discovery.js";
 
-const OMIT_BLOCKS = /<(script|style|noscript|template|iframe|svg|canvas|nav|footer|form)\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>/gi;
-const OMIT_COMMENTS = /<!--[\\s\\S]*?-->/g;
-const LINK_TERMS = /\\b(?:terms?|conditions?|tnc|t&c|mitc|reward|points?|benefits?|fees?|charges?|exclusions?|eligibility|lounge|milestone|spend|pdf|priority pass|forex|markup)\\b/i;
-const CARD_TERMS = /\\b(?:credit.?card|card|uni|regalia|horizon|simply.?save|sapphiro|rewards?)\\b/i;
+const OMIT_BLOCKS = /<(script|style|noscript|template|iframe|svg|canvas|nav|footer|form)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+const OMIT_COMMENTS = /<!--[\s\S]*?-->/g;
+const LINK_TERMS = /\b(?:terms?|conditions?|tnc|t&c|mitc|reward|points?|benefits?|fees?|charges?|exclusions?|eligibility|lounge|milestone|spend|pdf|priority pass|forex|markup)\b/i;
+const CARD_TERMS = /\b(?:credit.?card|card|uni|regalia|horizon|simply.?save|sapphiro|rewards?)\b/i;
 
 export function decodeHtmlEntities(value) {
   return String(value || "")
@@ -13,7 +13,7 @@ export function decodeHtmlEntities(value) {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&#(\\d+);/g, (_, digits) => safeCodePoint(Number(digits)))
+    .replace(/&#(\d+);/g, (_, digits) => safeCodePoint(Number(digits)))
     .replace(/&#x([0-9a-f]+);/gi, (_, digits) => safeCodePoint(parseInt(digits, 16)));
 }
 
@@ -23,12 +23,12 @@ function safeCodePoint(value) {
 }
 
 function attribute(tag, name) {
-  const match = String(tag || "").match(new RegExp("\\\\b" + name + "\\\\s*=\\\\s*([\"'])([\\\\s\\\\S]*?)\\\\1", "i"));
+  const match = String(tag || "").match(new RegExp("\\b" + name + "\\s*=\\s*([\"'])([\\s\\S]*?)\\1", "i"));
   return match ? decodeHtmlEntities(match[2]).trim() : "";
 }
 
 function issuerRoot(hostname) {
-  const host = String(hostname || "").toLowerCase().replace(/\\.$/, "");
+  const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
   const parts = host.split(".").filter(Boolean);
   if (host === "bank.in" || host.endsWith(".bank.in")) return parts.slice(-3).join(".");
   if (host.endsWith(".co.in")) return parts.slice(-3).join(".");
@@ -39,26 +39,26 @@ function textFromMarkup(value) {
   return decodeHtmlEntities(String(value || "")
     .replace(OMIT_COMMENTS, " ")
     .replace(OMIT_BLOCKS, " ")
-    .replace(/<br\\b[^>]*>/gi, "\\n")
-    .replace(/<\\/(?:p|div|li|h[1-6]|tr|section|article|main|dt|dd|table|ul|ol|blockquote|summary|details)\\s*>/gi, "\\n")
-    .replace(/<\\/td\\s*>/gi, " | ")
+    .replace(/<br\b[^>]*>/gi, "\n")
+    .replace(/<\/(?:p|div|li|h[1-6]|tr|section|article|main|dt|dd|table|ul|ol|blockquote|summary|details)\s*>/gi, "\n")
+    .replace(/<\/td\s*>/gi, " | ")
     .replace(/<[^>]+>/g, " "))
-    .replace(/\\u00a0/g, " ")
-    .replace(/[ \\t\\r\\f\\v]+/g, " ")
-    .replace(/ *\\n */g, "\\n")
-    .replace(/\\n{3,}/g, "\\n\\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t\r\f\v]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
 function jsonLdText(html) {
   const pieces = [];
-  const pattern = /<script\\b([^>]*)>([\\s\\S]*?)<\\/script\\s*>/gi;
+  const pattern = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
   const useful = new Set(["name", "description", "headline", "articleBody", "text", "termsOfService", "feesAndCommissionsSpecification"]);
   for (const match of String(html || "").matchAll(pattern)) {
     const type = attribute(match[1], "type").toLowerCase();
     if (type !== "application/ld+json") continue;
     try {
-      const parsed = JSON.parse(match[2].replace(/^\\s*<!--|-->\\s*$/g, ""));
+      const parsed = JSON.parse(match[2].replace(/^\s*<!--|-->\s*$/g, ""));
       const visit = (node, depth = 0) => {
         if (depth > 7 || node == null) return;
         if (Array.isArray(node)) {
@@ -74,11 +74,11 @@ function jsonLdText(html) {
       visit(parsed);
     } catch {}
   }
-  return [...new Set(pieces)].join("\\n");
+  return [...new Set(pieces)].join("\n");
 }
 
 function metaDescription(html) {
-  for (const match of String(html || "").matchAll(/<meta\\b[^>]*>/gi)) {
+  for (const match of String(html || "").matchAll(/<meta\b[^>]*>/gi)) {
     const tag = match[0];
     const key = (attribute(tag, "name") || attribute(tag, "property")).toLowerCase();
     if (["description", "og:description", "twitter:description"].includes(key)) {
@@ -91,7 +91,7 @@ function metaDescription(html) {
 
 export function extractOfficialHtml(html, baseUrl, cardName = "") {
   const raw = String(html || "");
-  const titleMatch = raw.match(/<title\\b[^>]*>([\\s\\S]*?)<\\/title\\s*>/i);
+  const titleMatch = raw.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
   const title = textFromMarkup(titleMatch?.[1] || "") || new URL(baseUrl).hostname;
   const description = metaDescription(raw);
   const jsonText = jsonLdText(raw);
@@ -99,21 +99,21 @@ export function extractOfficialHtml(html, baseUrl, cardName = "") {
   const withoutNoise = raw
     .replace(OMIT_COMMENTS, " ")
     .replace(OMIT_BLOCKS, " ")
-    .replace(/<div\\b[^>]*(?:id|class)\\s*=\\s*[\"'][^\"']*(?:cookie|consent|privacy-banner|social-share|share-tools|newsletter|modal-overlay|popup-overlay)[^\"']*[\"'][^>]*>[\\s\\S]*?<\\/div\\s*>/gi, " ");
+    .replace(/<div\b[^>]*(?:id|class)\s*=\s*["'][^"']*(?:cookie|consent|privacy-banner|social-share|share-tools|newsletter|modal-overlay|popup-overlay)[^"']*["'][^>]*>[\s\S]*?<\/div\s*>/gi, " ");
 
-  const mainBlocks = [...withoutNoise.matchAll(/<(?:main|article)\\b[^>]*>([\\s\\S]*?)<\\/(?:main|article)\\s*>/gi)].map(match => textFromMarkup(match[1]));
-  const bodyMatch = withoutNoise.match(/<body\\b[^>]*>([\\s\\S]*?)<\\/body\\s*>/i);
+  const mainBlocks = [...withoutNoise.matchAll(/<(?:main|article)\b[^>]*>([\s\S]*?)<\/(?:main|article)\s*>/gi)].map(match => textFromMarkup(match[1]));
+  const bodyMatch = withoutNoise.match(/<body\b[^>]*>([\s\S]*?)<\/body\s*>/i);
   const bodyText = textFromMarkup(bodyMatch?.[1] || withoutNoise);
   const mainText = mainBlocks.sort((a, b) => b.length - a.length)[0] || "";
   const contentText = mainText.length >= 100 ? mainText : bodyText;
   const parts = [title, description, jsonText, contentText].filter(Boolean);
-  const text = [...new Set(parts)].join("\\n\\n").replace(/\\n{3,}/g, "\\n\\n").trim();
+  const text = [...new Set(parts)].join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 
   const links = [];
   const seen = new Set();
   const safeHtml = raw.replace(OMIT_COMMENTS, " ").replace(OMIT_BLOCKS, " ");
   const expectedRoot = issuerRoot(new URL(baseUrl).hostname);
-  const anchorPattern = /<a\\b([^>]*)>([\\s\\S]*?)<\\/a\\s*>/gi;
+  const anchorPattern = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi;
   for (const match of safeHtml.matchAll(anchorPattern)) {
     const attrs = match[1] || "";
     const href = attribute(attrs, "href");
@@ -128,7 +128,7 @@ export function extractOfficialHtml(html, baseUrl, cardName = "") {
     const label = textFromMarkup(match[2]);
     const linkTitle = attribute(attrs, "title") || attribute(attrs, "aria-label") || label || url.pathname.split("/").pop() || url.hostname;
     const searchable = String(linkTitle) + " " + label + " " + url.pathname + " " + url.search;
-    const isPdf = /\\.pdf(?:$|[?#])/i.test(url.href) || /\\bpdf\\b/i.test(searchable);
+    const isPdf = /\.pdf(?:$|[?#])/i.test(url.href) || /\bpdf\b/i.test(searchable);
     if (!isPdf && !LINK_TERMS.test(searchable)) continue;
     const cardTokens = String(cardName || "").toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length > 2);
     const matchingTokens = cardTokens.filter(token => searchable.toLowerCase().includes(token)).length;
@@ -145,6 +145,6 @@ export function extractOfficialHtml(html, baseUrl, cardName = "") {
     description,
     text,
     relatedUrls: links.slice(0, 12),
-    javascriptHeavy: text.length < 100 && /<script\\b/i.test(raw)
+    javascriptHeavy: text.length < 100 && /<script\b/i.test(raw)
   };
 }
