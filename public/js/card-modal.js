@@ -56,7 +56,7 @@
       const formula = C.formatNumber(rule.rate) + " " + unit + " / " + C.formatINR(rule.perAmount);
       const cap = rule.cap && typeof rule.cap === "object"
         ? (rule.cap.type === "spend" ? C.formatINR(rule.cap.value) : C.formatNumber(rule.cap.value) + " " + unit) +
-          (rule.cap.period ? " / " + String(rule.cap.period).replace(/_/g, " ") : "") +
+          (rule.cap.period ? " per " + String(rule.cap.period).replace(/_/g, " ") : "") +
           (rule.cap.overCapCategory ? "; then " + String(rule.cap.overCapCategory).replace(/_/g, " ") : "")
         : "—";
       const minimum = rule.minTransaction != null && Number.isFinite(Number(rule.minTransaction)) && Number(rule.minTransaction) > 0
