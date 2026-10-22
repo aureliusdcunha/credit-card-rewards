@@ -490,7 +490,7 @@ test("extracts combined Regalia Gold joining/renewal membership fee as both ₹2
     "Joining / Renewal Membership Fee of Rs. 2500 + Applicable Taxes.",
     "Spend ₹4,00,000 within the preceding 12 billing cycles of your anniversary year to waive the renewal fee for the following year.",
     "SOURCE TEXT END"
-  ].join("\\n");
+  ].join("\n");
   const draft = {
     issuer: "HDFC Bank",
     cardName: "Regalia Gold",
