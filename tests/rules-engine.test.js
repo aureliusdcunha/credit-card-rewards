@@ -150,3 +150,44 @@ test("verified fallback does not override a matching category exclusion", () => 
   assert.equal(result.excluded, true);
   assert.equal(result.points, 0);
 });
+
+
+test("explains when every approved rule starts after the selected transaction date", () => {
+  const card = {
+    id: "future-rules",
+    name: "Recently reviewed card",
+    issuer: "Example Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [
+      { category: "general", rate: 2, perAmount: 100, unit: "Reward Points", status: "approved", validFrom: "2026-10-22" },
+      { category: "airline_direct", rate: 5, perAmount: 100, unit: "Reward Points", status: "approved", validFrom: "2026-10-22" }
+    ],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-07" });
+  assert.equal(result.ok, true);
+  assert.equal(result.unavailable, true);
+  assert.equal(result.ruleStatus, "date_mismatch");
+  assert.match(result.explanation, /transaction date \(2026-10-07\) is before the available rules become effective \(2026-10-22\)/i);
+  assert.equal(result.firstFutureEffectiveDate, "2026-10-22");
+});
+
+test("explains when all approved rules expired before the selected transaction date", () => {
+  const card = {
+    id: "expired-rules",
+    name: "Expired rules card",
+    issuer: "Example Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [
+      { category: "general", rate: 2, perAmount: 100, unit: "Reward Points", status: "approved", validFrom: "2024-01-01", validTo: "2025-12-31" }
+    ],
+    exclusions: []
+  };
+  const result = calculateRewards({ card, amount: 25000, category: "dining", purchaseDate: "2026-10-07" });
+  assert.equal(result.unavailable, true);
+  assert.equal(result.ruleStatus, "date_mismatch");
+  assert.match(result.explanation, /rules expired \(2025-12-31\)/i);
+  assert.equal(result.lastExpiredDate, "2025-12-31");
+});
