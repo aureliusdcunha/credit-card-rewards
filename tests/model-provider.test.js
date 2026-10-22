@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getAiProvider, generateWithGemini, DEFAULT_GEMINI_MODEL } from "../src/model-provider.js";
+import { getAiProvider, generateWithGemini, generateWithGeminiResilient, DEFAULT_GEMINI_MODEL } from "../src/model-provider.js";
 
 test("prefers Gemini when a Gemini API key is configured", () => {
   const provider = getAiProvider({ GEMINI_API_KEY: "test-key", AI: { run() {} } });
@@ -106,6 +106,73 @@ test("sends official PDF bytes to Gemini when inline document extraction is used
     const filePart = requestBody.contents[0].parts.find(part => part.inlineData);
     assert.deepEqual(filePart.inlineData, { mimeType: "application/pdf", data: "JVBERi0xLjQK" });
     assert.match(result.text, /Joining Fee: ₹2,500/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("retries a Gemini 503 once, then succeeds with the free-tier fallback model", async () => {
+  const originalFetch = globalThis.fetch;
+  const attemptedModels = [];
+  globalThis.fetch = async (rawUrl, options) => {
+    const url = String(rawUrl);
+    const match = url.match(/models\/([^:]+):generateContent$/);
+    const model = match ? decodeURIComponent(match[1]) : "unknown";
+    attemptedModels.push(model);
+    if (model === "gemini-3.5-flash") {
+      return new Response(JSON.stringify({
+        error: { message: "This model is currently experiencing high demand." }
+      }), { status: 503, headers: { "content-type": "application/json" } });
+    }
+    return new Response(JSON.stringify({
+      candidates: [{ finishReason: "STOP", content: { parts: [{ text: '{"rules":[]}' }] } }]
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const result = await generateWithGeminiResilient({
+      GEMINI_API_KEY: "test-key",
+      GEMINI_MODEL: "gemini-3.5-flash"
+    }, { prompt: "Extract card terms" });
+    assert.equal(result.model, "gemini-3.5-flash-lite");
+    assert.equal(result.primaryModel, "gemini-3.5-flash");
+    assert.equal(result.fallbackUsed, true);
+    assert.deepEqual(attemptedModels, [
+      "gemini-3.5-flash",
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite"
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("uses configured Gemini fallback models and returns actionable errors when all models are unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  const attemptedModels = [];
+  globalThis.fetch = async rawUrl => {
+    const url = String(rawUrl);
+    const match = url.match(/models\/([^:]+):generateContent$/);
+    attemptedModels.push(match ? decodeURIComponent(match[1]) : "unknown");
+    return new Response(JSON.stringify({
+      error: { message: "model overloaded" }
+    }), { status: 503, headers: { "content-type": "application/json" } });
+  };
+  try {
+    await assert.rejects(
+      () => generateWithGeminiResilient({
+        GEMINI_API_KEY: "test-key",
+        GEMINI_MODEL: "primary-model",
+        GEMINI_FALLBACK_MODELS: "fallback-a,fallback-b"
+      }, { prompt: "Extract card terms" }),
+      /primary and fallback models are temporarily unavailable.*primary-model, fallback-a, fallback-b/i
+    );
+    assert.deepEqual(attemptedModels, [
+      "primary-model",
+      "primary-model",
+      "fallback-a",
+      "fallback-b"
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
