@@ -114,3 +114,36 @@ body.card-modal-open{overflow:hidden}
   .card-modal-dialog{animation:card-modal-enter .16s ease-out}
   @keyframes card-modal-enter{from{transform:translateY(8px);opacity:.82}to{transform:translateY(0);opacity:1}}
 }
+
+
+/* Keep card-detail navigation visible even when the modal content is tall or the viewport is short. */
+.card-modal-header,
+.card-modal-footer {
+  flex: 0 0 auto;
+}
+.card-modal-tabs {
+  flex: 0 0 auto;
+  min-height: 54px;
+  align-items: stretch;
+}
+.card-modal-tabs [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  flex-shrink: 0;
+  min-height: 42px;
+  line-height: 1.35;
+}
+.card-modal-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+@media (max-width: 700px) {
+  .card-modal-tabs {
+    min-height: 52px;
+  }
+  .card-modal-tabs [role="tab"] {
+    min-height: 42px;
+  }
+}
