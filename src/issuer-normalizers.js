@@ -240,14 +240,20 @@ function explicitFeeFact(clauses, feeKind) {
 }
 
 function findWaiverFact(clauses) {
-  for (const clause of clauses) {
+  const candidates = clauses.filter(clause => {
     const quote = clause.quote;
     const hasFeeContext = /\b(?:fee waiver|waiv\w*|renewal fee|annual fee)\b/i.test(quote);
     const hasSpendContext = /\b(?:spend|spends|spent|annual purchase|eligible purchase|eligible transaction)\b/i.test(quote);
     const hasThreshold = /(?:₹\s*|Rs\.?\s*|INR\s*)[\d,]+|\b\d+(?:\.\d+)?\s*(?:lakh|lakhs|k)\b/i.test(quote);
-    if (hasFeeContext && hasSpendContext && hasThreshold) return clause;
-  }
-  return null;
+    return hasFeeContext && hasSpendContext && hasThreshold;
+  });
+  // Prefer the most informative issuer sentence (billing-cycle, anniversary or
+  // waiver-period wording) over a short heading that merely repeats the threshold.
+  candidates.sort((a, b) => {
+    const score = value => (/billing cycles?|anniversary|following year|next year|preceding|previous/i.test(value.quote) ? 100 : 0) + value.quote.length;
+    return score(b) - score(a);
+  });
+  return candidates[0] || null;
 }
 
 function findLoungeSpendFacts(clauses) {
