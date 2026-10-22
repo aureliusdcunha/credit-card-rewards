@@ -87,10 +87,17 @@ function arrayBufferToBase64(buffer) {
 async function fetchOfficialSource(rawUrl, aiBinding, providerEnv = {}) {
   let current = validateOfficialUrl(rawUrl);
   for (let redirectCount = 0; redirectCount <= 3; redirectCount++) {
+    const timeoutOptions = {};
+    try {
+      if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+        timeoutOptions.signal = AbortSignal.timeout(10000);
+      }
+    } catch {}
     const response = await fetch(current.toString(), {
       method: "GET",
       redirect: "manual",
-      headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "accept": "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.8", "accept-language": "en-IN,en-US;q=0.9,en;q=0.8" }
+      headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "accept": "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.8", "accept-language": "en-IN,en-US;q=0.9,en;q=0.8" },
+      ...timeoutOptions
     });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get("location");
@@ -397,21 +404,38 @@ async function autoExtractCardWithTrace(request, env, trace) {
   // dated terms PDFs. Reading just the landing page often captures benefits but
   // misses the numeric baseline earning rate, so merge several official sources.
   const maxSources = isHdfcRegalia ? 5 : 3;
-  for (const candidate of candidates.slice(0, 10)) {
-    if (selectedSources.length >= maxSources) break;
-    trace.stage = "read official source " + (selectedSources.length + 1);
-    try {
-      const fetched = await fetchOfficialSource(candidate.url, env.AI, env);
-      if (!fetched.text || fetched.text.length < 100) continue;
-      const url = fetched.url;
-      if (selectedSources.some(source => source.url === url)) continue;
+  const candidatesToRead = candidates.slice(0, 10);
+  // Read independent pages concurrently. Keep HDFC batches smaller because PDF
+  // conversion can itself call an AI provider and should not spike free-tier quota.
+  const readBatchSize = isHdfcRegalia ? 2 : 3;
+  for (let offset = 0; offset < candidatesToRead.length && selectedSources.length < maxSources; offset += readBatchSize) {
+    const batch = candidatesToRead.slice(offset, offset + readBatchSize);
+    trace.stage = "read official source batch " + (Math.floor(offset / readBatchSize) + 1);
+    const outcomes = await Promise.all(batch.map(async candidate => {
+      try {
+        const fetched = await fetchOfficialSource(candidate.url, env.AI, env);
+        if (!fetched.text || fetched.text.length < 100) return { candidate, skipped: true };
+        return { candidate, fetched };
+      } catch (error) {
+        return { candidate, error: String(error?.message || error).slice(0, 160) };
+      }
+    }));
+    // Promise.all preserves candidate order, so source ranking remains stable
+    // even when a lower-ranked URL responds first.
+    for (const outcome of outcomes) {
+      if (selectedSources.length >= maxSources) break;
+      if (outcome.error) {
+        sourceErrors.push(outcome.error);
+        continue;
+      }
+      if (!outcome.fetched) continue;
+      const fetched = outcome.fetched;
+      if (selectedSources.some(source => source.url === fetched.url)) continue;
       selectedSources.push({
-        url,
-        title: fetched.title || candidate.title || "Official issuer source",
+        url: fetched.url,
+        title: fetched.title || outcome.candidate.title || "Official issuer source",
         text: fetched.text.slice(0, Math.floor(MAX_SOURCE_CHARS / maxSources))
       });
-    } catch (error) {
-      sourceErrors.push(String(error?.message || error).slice(0, 160));
     }
   }
   if (!selectedSources.length) {
