@@ -492,7 +492,7 @@ function knownOfficialFallbacks(issuer, cardName) {
       }
     ];
   }
-  if ((issuerText.includes("sbi") || issuerText.includes("state bank of india")) && /simply\\s*save|simplysave/.test(cardText)) {
+  if ((issuerText.includes("sbi") || issuerText.includes("state bank of india")) && /simply\s*save|simplysave/.test(cardText)) {
     return [
       {
         url: "https://www.sbicard.com/en/personal/credit-cards/simplysave-sbi-card.html",
