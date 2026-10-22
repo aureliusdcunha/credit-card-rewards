@@ -299,3 +299,118 @@ test("ICICI discovery reports useful details when all official source fallbacks 
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("HDFC Regalia Gold extraction combines multiple official sources and produces numeric rules plus sourced benefits", async () => {
+  const originalFetch = globalThis.fetch;
+  const primaryUrl = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
+  const featureUrl = "https://v.hdfc.bank.in/regalia-gold/features.html";
+  const rewardTermsUrl = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-travel-edge-tnc.pdf";
+  const generalTermsUrl = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/terms-and-conditions.pdf";
+  const fetchedUrls = [];
+  const sourcePages = {
+    [primaryUrl]: "<html><head><title>HDFC Bank Regalia Gold Credit Card</title></head><body><h1>Regalia Gold</h1><p>Welcome benefits: complimentary Swiggy One and MMT Black Gold membership after spends of ₹1 lakh in the first 90 days.</p><p>Travel benefits: domestic and international airport lounge access subject to terms.</p></body></html>",
+    [featureUrl]: "<html><head><title>Regalia Gold Features</title></head><body><h1>Rewarding Everyday Indulgences</h1><p>5 Reward Points for every ₹200 spent on daily and retail spends such as grocery, apparel, utility/bill pay, insurance and school fees, subject to terms.</p><p>Dining benefits: savings on restaurant bills via Swiggy Dineout when paid through the Swiggy app using Regalia Gold.</p><p>Milestone benefits: ₹5,000 worth flight vouchers on spends of ₹5 lakh and ₹7.5 lakh.</p></body></html>"
+  };
+  const pdfTexts = {
+    [rewardTermsUrl]: "Updates effective 15 May 2026: base reward points of 5 Reward Points for every ₹200 spends across eligible categories. Reward points per statement cycle capped at 50,000. Boarding Edge: any 2 benefits per calendar quarter.",
+    [generalTermsUrl]: "Regalia Gold general terms: welcome memberships require net retail spends of ₹1 lakh within the first 90 days. Redemption values: flights/hotels ₹0.50 per point; Gold catalogue ₹0.65 per point; vouchers up to ₹0.35 per point. Renewal fee waiver requires ₹4 lakh annual spend."
+  };
+  globalThis.fetch = async raw => {
+    const url = new URL(typeof raw === "string" ? raw : raw.url || raw.toString());
+    if (["html.duckduckgo.com", "lite.duckduckgo.com", "www.bing.com"].includes(url.hostname)) {
+      return new Response("<html><body>No parseable results</body></html>", {
+        status: 200,
+        headers: { "content-type": url.hostname === "www.bing.com" ? "application/rss+xml" : "text/html" }
+      });
+    }
+    const fullUrl = url.toString();
+    fetchedUrls.push(fullUrl);
+    if (sourcePages[fullUrl]) return new Response(sourcePages[fullUrl], { status: 200, headers: { "content-type": "text/html" } });
+    if (pdfTexts[fullUrl]) return new Response(new Uint8Array([1,2,3,4]), { status: 200, headers: { "content-type": "application/pdf", "content-length": "4" } });
+    throw new Error("Unexpected outbound test URL: " + fullUrl);
+  };
+
+  let promptText = "";
+  const extracted = {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    network: null,
+    rewardCurrency: "Reward Points",
+    annualFee: 2500,
+    annualFeeWaiver: "Renewal fee waived on eligible annual spends of ₹4 lakh",
+    effectiveDate: "2026-05-15",
+    rules: [{
+      category: "general",
+      rate: 5,
+      perAmount: 200,
+      unit: "Reward Points",
+      minTransaction: 0,
+      cap: { type: "points", value: 50000, period: "statement_cycle" },
+      rounding: "down",
+      validFrom: "2026-05-15",
+      validTo: null,
+      sourceQuote: "5 Reward Points for every ₹200 spends across eligible categories.",
+      sourceUrl: rewardTermsUrl,
+      notes: "Base rate; subject to exclusions and terms."
+    }],
+    exclusions: [],
+    benefits: [
+      { name: "Welcome benefits", description: "Complimentary Swiggy One and MMT Black Gold membership", conditions: "Eligible spends of ₹1 lakh within the first 90 days", sourceQuote: "welcome memberships require net retail spends of ₹1 lakh within the first 90 days", sourceUrl: generalTermsUrl },
+      { name: "Airport lounge access", description: "Domestic and international lounge access subject to terms", conditions: "Check the currently applicable lounge eligibility", sourceQuote: "domestic and international airport lounge access subject to terms", sourceUrl: primaryUrl },
+      { name: "Milestone flight vouchers", description: "₹5,000 flight voucher milestones", conditions: "Eligible spends of ₹5 lakh and ₹7.5 lakh", sourceQuote: "₹5,000 worth flight vouchers on spends of ₹5 lakh and ₹7.5 lakh", sourceUrl: featureUrl },
+      { name: "Dining offer", description: "Savings on restaurant bills via Swiggy Dineout", conditions: "Pay via the Swiggy app using Regalia Gold", sourceQuote: "savings on restaurant bills via Swiggy Dineout when paid through the Swiggy app using Regalia Gold", sourceUrl: featureUrl },
+      { name: "Reward redemption values", description: "Redemption value varies by category", conditions: "Flight/hotels ₹0.50 per point; Gold catalogue ₹0.65 per point; vouchers up to ₹0.35", sourceQuote: "flights/hotels ₹0.50 per point; Gold catalogue ₹0.65 per point; vouchers up to ₹0.35 per point", sourceUrl: generalTermsUrl }
+    ],
+    missingItems: [],
+    summary: "Regalia Gold base rewards and travel, welcome, milestone, dining and redemption benefits subject to terms."
+  };
+
+  globalThis.fetch = async raw => {
+    const url = new URL(typeof raw === "string" ? raw : raw.url || raw.toString());
+    if (["html.duckduckgo.com", "lite.duckduckgo.com", "www.bing.com"].includes(url.hostname)) {
+      return new Response("<html><body>No parseable results</body></html>", { status: 200, headers: { "content-type": "text/html" } });
+    }
+    fetchedUrls.push(url.toString());
+    if (sourcePages[url.toString()]) return new Response(sourcePages[url.toString()], { status: 200, headers: { "content-type": "text/html" } });
+    if (pdfTexts[url.toString()]) return new Response(new Uint8Array([1,2,3,4]), { status: 200, headers: { "content-type": "application/pdf", "content-length": "4" } });
+    throw new Error("Unexpected outbound test URL: " + url.toString());
+  };
+  const env = {
+    ADMIN_TOKEN: "test-admin-token",
+    AI: {
+      toMarkdown: async ({ name }) => ({
+        format: "markdown",
+        data: pdfTexts[name.includes("travel-edge") ? rewardTermsUrl : generalTermsUrl]
+      }),
+      run: async (_model, request) => {
+        promptText = request.messages?.[1]?.content || "";
+        return { response: JSON.stringify(extracted) };
+      }
+    }
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: { "authorization": "Bearer test-admin-token", "content-type": "application/json" },
+      body: JSON.stringify({ issuer: "HDFC Bank", cardName: "Regalia Gold" })
+    }), env);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.selectedSource, primaryUrl);
+    assert.ok(body.discovery.sourcesRead.length >= 3);
+    assert.ok(promptText.includes(featureUrl));
+    assert.ok(promptText.includes(rewardTermsUrl));
+    assert.ok(promptText.includes(generalTermsUrl));
+    assert.equal(body.extracted.rules.length, 1);
+    assert.equal(body.extracted.rules[0].rate, 5);
+    assert.equal(body.extracted.rules[0].perAmount, 200);
+    assert.equal(body.extracted.rules[0].sourceUrl, rewardTermsUrl);
+    assert.equal(body.extracted.benefits.length, 5);
+    assert.ok(body.extracted.benefits.every(benefit => benefit.sourceUrl));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
