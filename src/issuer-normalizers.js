@@ -1,6 +1,6 @@
 const BASE_RATE_PATTERN = /5\s*(?:reward\s*)?points?\s+(?:for\s+every|on\s+every|per)\s*(?:₹|rs\.?\s*|inr\s*)?200\s*(?:spent|spends)?(?:\s*\(?\s*on\s+retail\s+spends?\s*\)?)?/i;
 const ACCELERATED_PATTERN = /\b(?:5\s*[x×]|accelerated reward|select merchants?|select brands?|smartbuy|myntra|nykaa|reliance digital|marks\s*(?:&|and)\s*spencer)\b/i;
-const BASE_CONTINUATION_PATTERN = /\bbase reward points? (?:accrued|earned).{0,100}\b(?:continue|not eligible|as is|no capping)\b/i;
+const BASE_CONTINUATION_PATTERN = /\bbase reward points?\b.{0,140}\b(?:continue|not eligible|as is|no capping)\b/i;
 
 function officialSourceSections(sourceText, fallbackUrl) {
   const sections = [];
