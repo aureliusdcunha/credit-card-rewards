@@ -169,7 +169,8 @@ function validateApprovedData(data) {
   normalizeDraftCategories(data);
   normalizeDraftRewardUnits(data);
   sanitizeIncompleteEarningRules(data);
-  if (data.rules.length === 0) throw new Error("No complete earning rules remain after validation. At least one rule needs a numeric reward rate, a positive perAmount spend basis, a reward unit, and a traceable sourceQuote. The incomplete claims were retained as benefits/missingItems; use the current official card terms to add a complete rule before publishing.");
+  // Card metadata and source-backed benefits can be published even when a reward rule is not verifiable.
+  // In that case the card is explicitly marked no_verified_rules and cannot contribute a verified estimate.
   if (data.benefits.length > 150) throw new Error("Too many benefits in one draft. Split the source into smaller sections.");
   for (const [index, rule] of data.rules.entries()) {
     if (rule.sourceUrl) { try { rule.sourceUrl = validateOfficialUrl(rule.sourceUrl).toString(); } catch { throw new Error(`Rule ${index + 1}: sourceUrl must be an allow-listed official issuer HTTPS URL.`); } }
@@ -599,13 +600,15 @@ async function approveDraft(request, env, draftId) {
   let cardId = requestedCardId;
   let reusedMatchingCard = false;
   let createdNewCard = false;
+  let existingApprovedRuleCount = 0;
+  let existingReviewStatus = null;
   const now = new Date().toISOString();
   const effectiveFrom = String(approved.effectiveDate || now.slice(0, 10));
 
   // Never create a second catalogue row for the same issuer + card variant when
   // the reviewer opens a saved draft with no card selected.
   if (!cardId) {
-    const matchingCard = await env.DB.prepare(`SELECT id FROM cards
+    const matchingCard = await env.DB.prepare(`SELECT id, review_status FROM cards
       WHERE lower(trim(issuer)) = lower(trim(?))
         AND lower(trim(name)) = lower(trim(?))
         AND status != 'archived'
@@ -614,14 +617,24 @@ async function approveDraft(request, env, draftId) {
       .bind(String(approved.issuer).trim(), String(approved.cardName).trim()).first();
     if (matchingCard?.id) {
       cardId = matchingCard.id;
+      existingReviewStatus = matchingCard.review_status || null;
       reusedMatchingCard = true;
     }
   }
 
   if (cardId) {
-    const existing = await env.DB.prepare("SELECT id FROM cards WHERE id = ?").bind(cardId).first();
+    const existing = await env.DB.prepare("SELECT id, review_status FROM cards WHERE id = ?").bind(cardId).first();
     if (!existing) return json({ error: "Selected card does not exist in the D1 catalogue." }, 400);
-    await env.DB.prepare("UPDATE cards SET review_status = 'needs_review' WHERE id = ?").bind(cardId).run();
+    existingReviewStatus = existing.review_status || existingReviewStatus;
+    const ruleCountRow = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM card_rules WHERE card_id = ? AND status = 'approved'"
+    ).bind(cardId).first();
+    existingApprovedRuleCount = Number(ruleCountRow?.count || 0);
+    // Do not disturb a card's existing review state when the new draft contains
+    // no new rules; active approved rules will be preserved in that case.
+    if (approved.rules.length > 0) {
+      await env.DB.prepare("UPDATE cards SET review_status = 'needs_review' WHERE id = ?").bind(cardId).run();
+    }
   } else {
     const baseSlug = makeSlug(`${approved.issuer}-${approved.cardName}`);
     cardId = baseSlug;
@@ -641,8 +654,13 @@ async function approveDraft(request, env, draftId) {
     .run();
 
   // Preserve history by retiring the previous set before inserting the reviewed version.
+  // Replace prior earning rules only when this draft contains a new complete rule.
+  // Otherwise retain previously approved rules and retire only provisional demo rules.
+  const retireRulesSql = approved.rules.length > 0
+    ? "UPDATE card_rules SET status = 'retired' WHERE card_id = ? AND status IN ('approved','demo')"
+    : "UPDATE card_rules SET status = 'retired' WHERE card_id = ? AND status = 'demo'";
   await env.DB.batch([
-    env.DB.prepare("UPDATE card_rules SET status = 'retired' WHERE card_id = ? AND status IN ('approved','demo')").bind(cardId),
+    env.DB.prepare(retireRulesSql).bind(cardId),
     env.DB.prepare("UPDATE card_exclusions SET status = 'retired' WHERE card_id = ? AND status IN ('approved','demo')").bind(cardId),
     env.DB.prepare("UPDATE card_benefits SET status = 'retired' WHERE card_id = ? AND status IN ('approved','demo')").bind(cardId)
   ]);
@@ -677,8 +695,12 @@ async function approveDraft(request, env, draftId) {
       .bind(crypto.randomUUID(), cardId, JSON.stringify(benefitJson), benefit.validFrom || effectiveFrom, benefit.validTo || null, sourceId, now));
   }
   if (statements.length) await env.DB.batch(statements);
-  await env.DB.prepare("UPDATE cards SET issuer = ?, name = ?, network = ?, reward_currency = ?, annual_fee = COALESCE(?, annual_fee), joining_fee = COALESCE(?, joining_fee), annual_fee_waiver = COALESCE(?, annual_fee_waiver), description = ?, official_url = ?, review_status = 'verified', source_date = ?, updated_at = ? WHERE id = ?")
-    .bind(String(approved.issuer).slice(0, 100), String(approved.cardName).slice(0, 140), String(approved.network || "Not specified"), String(approved.rewardCurrency || "Rewards"), approved.annualFee != null && approved.annualFee !== "" && Number.isFinite(Number(approved.annualFee)) ? Number(approved.annualFee) : null, approved.joiningFee != null && approved.joiningFee !== "" && Number.isFinite(Number(approved.joiningFee)) ? Number(approved.joiningFee) : null, approved.annualFeeWaiver || null, approved.summary || "", draftRow.source_url, approved.effectiveDate || null, now, cardId)
+  const preservedExistingRules = approved.rules.length === 0 && existingApprovedRuleCount > 0;
+  const cardReviewStatus = approved.rules.length > 0 || preservedExistingRules
+    ? "verified"
+    : "no_verified_rules";
+  await env.DB.prepare("UPDATE cards SET issuer = ?, name = ?, network = ?, reward_currency = ?, annual_fee = COALESCE(?, annual_fee), joining_fee = COALESCE(?, joining_fee), annual_fee_waiver = COALESCE(?, annual_fee_waiver), description = ?, official_url = ?, review_status = ?, source_date = ?, updated_at = ? WHERE id = ?")
+    .bind(String(approved.issuer).slice(0, 100), String(approved.cardName).slice(0, 140), String(approved.network || "Not specified"), String(approved.rewardCurrency || "Rewards"), approved.annualFee != null && approved.annualFee !== "" && Number.isFinite(Number(approved.annualFee)) ? Number(approved.annualFee) : null, approved.joiningFee != null && approved.joiningFee !== "" && Number.isFinite(Number(approved.joiningFee)) ? Number(approved.joiningFee) : null, approved.annualFeeWaiver || null, approved.summary || "", draftRow.source_url, cardReviewStatus, approved.effectiveDate || null, now, cardId)
     .run();
   await env.DB.prepare("UPDATE extraction_drafts SET status = 'approved', card_id = ? WHERE id = ?").bind(cardId, draftId).run();
 
@@ -703,12 +725,32 @@ async function approveDraft(request, env, draftId) {
     }
   }
 
-  const message = createdNewCard
-    ? "New card created and reviewed rules published. The card is now in the catalogue."
-    : reusedMatchingCard
-      ? "Published reviewed rules to the existing matching card instead of creating a duplicate. The previous rule set was retained as retired history; duplicate pending drafts were superseded."
-      : "Reviewed rules published. The previous rule set was retained as retired history; duplicate pending drafts were superseded.";
-  return json({ ok: true, cardId, sourceId, reusedMatchingCard, createdNewCard, message });
+  const publishedRules = approved.rules.length;
+  let message;
+  if (publishedRules === 0) {
+    message = preservedExistingRules
+      ? "Reviewed card details saved. Existing approved earning rules were kept unchanged because this draft contained no new complete earning rules."
+      : createdNewCard
+        ? "New card created with reviewed source details and benefits. No complete earning rule was available, so the card is marked 'No verified rules' until a rate is reviewed."
+        : "Reviewed card details saved. No complete earning rule was available, so the card is marked 'No verified rules'. Add a source-backed earning rule before using reward calculations.";
+  } else {
+    message = createdNewCard
+      ? "New card created and reviewed rules published. The card is now in the catalogue."
+      : reusedMatchingCard
+        ? "Published reviewed rules to the existing matching card instead of creating a duplicate. The previous rule set was retained as retired history; duplicate pending drafts were superseded."
+        : "Reviewed rules published. The previous rule set was retained as retired history; duplicate pending drafts were superseded.";
+  }
+  return json({
+    ok: true,
+    cardId,
+    sourceId,
+    reusedMatchingCard,
+    createdNewCard,
+    publishedRules,
+    preservedExistingRules,
+    reviewStatus: cardReviewStatus,
+    message
+  });
 }
 
 async function handleApi(request, env) {
