@@ -430,11 +430,24 @@ async function autoExtractCardWithTrace(request, env, trace) {
   const isHdfcRegalia = /hdfc/i.test(issuer) && /regalia/i.test(cardName) && /gold/i.test(cardName);
   // Keep a compact evidence bundle for faster model extraction. Regalia has
   // special handling because some numeric earning/lounges terms live in PDFs.
-  const maxSources = isHdfcRegalia ? 3 : 2;
+  const maxSources = isHdfcRegalia ? 4 : 2;
   const isPdfCandidate = candidate => /\.pdf(?:[?#]|$)/i.test(String(candidate.url || "")) ||
     /\bpdf\b/i.test(String(candidate.title || ""));
   const htmlCandidates = candidates.filter(candidate => !isPdfCandidate(candidate)).slice(0, 5);
-  const pdfCandidates = candidates.filter(isPdfCandidate).slice(0, isHdfcRegalia ? 3 : 2);
+  const pdfCandidates = candidates.filter(isPdfCandidate);
+  if (isHdfcRegalia) {
+    // Preserve the two PDFs that contain Regalia Gold's numeric base rate and
+    // general redemption/fee rules before optional lounge-only documentation.
+    const hdfcPdfPriority = candidate => {
+      const value = (String(candidate.url || "") + " " + String(candidate.title || "")).toLowerCase();
+      if (/travel-edge|reward.*terms|reward.*tnc/.test(value)) return 0;
+      if (/terms-and-conditions|general.*terms/.test(value)) return 1;
+      if (/lounge/.test(value)) return 2;
+      return 3;
+    };
+    pdfCandidates.sort((a, b) => hdfcPdfPriority(a) - hdfcPdfPriority(b) || Number(b.score || 0) - Number(a.score || 0));
+  }
+  pdfCandidates.splice(isHdfcRegalia ? 3 : 2);
   const readCandidate = async candidate => {
     try {
       const fetched = await fetchOfficialSource(candidate.url, env.AI, env);
@@ -473,7 +486,7 @@ async function autoExtractCardWithTrace(request, env, trace) {
   // avoid bursty free-tier quota use.
   let pdfIndex = 0;
   while (selectedSources.length < maxSources && pdfIndex < pdfCandidates.length &&
-         (selectedSources.length === 0 || (isHdfcRegalia && selectedSources.length < 3))) {
+         (selectedSources.length === 0 || (isHdfcRegalia && selectedSources.length < maxSources))) {
     trace.stage = "read official PDF fallback " + (pdfIndex + 1);
     const outcome = await readCandidate(pdfCandidates[pdfIndex++]);
     const sourcesBeforePdf = selectedSources.length;
