@@ -601,7 +601,6 @@ async function approveDraft(request, env, draftId) {
   let reusedMatchingCard = false;
   let createdNewCard = false;
   let existingApprovedRuleCount = 0;
-  let existingReviewStatus = null;
   const now = new Date().toISOString();
   const effectiveFrom = String(approved.effectiveDate || now.slice(0, 10));
 
@@ -617,7 +616,6 @@ async function approveDraft(request, env, draftId) {
       .bind(String(approved.issuer).trim(), String(approved.cardName).trim()).first();
     if (matchingCard?.id) {
       cardId = matchingCard.id;
-      existingReviewStatus = matchingCard.review_status || null;
       reusedMatchingCard = true;
     }
   }
@@ -625,7 +623,6 @@ async function approveDraft(request, env, draftId) {
   if (cardId) {
     const existing = await env.DB.prepare("SELECT id, review_status FROM cards WHERE id = ?").bind(cardId).first();
     if (!existing) return json({ error: "Selected card does not exist in the D1 catalogue." }, 400);
-    existingReviewStatus = existing.review_status || existingReviewStatus;
     const ruleCountRow = await env.DB.prepare(
       "SELECT COUNT(*) AS count FROM card_rules WHERE card_id = ? AND status = 'approved'"
     ).bind(cardId).first();
