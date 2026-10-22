@@ -97,10 +97,10 @@ export function parseDuckDuckGoResults(html, expectedDomain = null) {
 export function parseDuckDuckGoLiteResults(html, expectedDomain = null) {
   const results = [];
   const seen = new Set();
-  const anchorRegex = /<a\\b([^>]*)>([\\s\\S]*?)<\\/a>/gi;
+  const anchorRegex = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
   for (const match of String(html || "").matchAll(anchorRegex)) {
     const attrs = match[1] || "";
-    const hrefMatch = attrs.match(/\\bhref\\s*=\\s*(["'])(.*?)\\1/i);
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])(.*?)\1/i);
     if (!hrefMatch) continue;
     const rawUrl = unwrapSearchUrl(hrefMatch[2]);
     if (!rawUrl) continue;
