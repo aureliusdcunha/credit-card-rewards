@@ -1,4 +1,5 @@
 import { DEMO_CARDS } from "./demo-data.js";
+import { deduplicatePendingDraftRows } from "./draft-dedupe.js";
 
 function fromDbCard(row) {
   return {
@@ -63,8 +64,9 @@ export async function getCards(env) {
 
 export async function getDrafts(env) {
   if (!env.DB) return [];
-  const result = await env.DB.prepare("SELECT id, card_id, source_url, source_title, source_excerpt, extracted_json, status, created_at FROM extraction_drafts WHERE status = 'needs_review' ORDER BY created_at DESC LIMIT 100").all();
-  return (result.results || []).map(row => ({
+  const result = await env.DB.prepare("SELECT id, card_id, source_url, source_title, source_excerpt, extracted_json, status, created_at FROM extraction_drafts WHERE status = 'needs_review' ORDER BY created_at DESC LIMIT 200").all();
+  const uniqueRows = deduplicatePendingDraftRows(result.results || []);
+  return uniqueRows.slice(0, 100).map(row => ({
     id: row.id, cardId: row.card_id, sourceUrl: row.source_url, sourceTitle: row.source_title,
     sourceExcerpt: row.source_excerpt, extractedJson: row.extracted_json, status: row.status, createdAt: row.created_at
   }));
