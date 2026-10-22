@@ -5,9 +5,8 @@ export function isSpendCurrencyUnit(value) {
 }
 
 function isCashValueRewardCurrency(value) {
-  return /\\b(?:cashback|cash back|cash reward|statement credit|rupee value)\\b/i.test(String(value || ""));
+  return /\b(?:cashback|cash back|cash reward|statement credit|rupee value)\b/i.test(String(value || ""));
 }
-
 export function normalizeRewardUnit(unit, rewardCurrency) {
   const current = String(unit || "").trim();
   const reward = String(rewardCurrency || "").trim();
