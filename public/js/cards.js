@@ -38,6 +38,50 @@
       if (opening) expanded.innerHTML = cardDetails(card);
       button.textContent = opening ? "Hide rules ↑" : "View rules ↗";
     }));
+
+    // Catalogue maintenance is available only in a tab with the admin token set in
+    // Source Review. Archiving hides a card from the catalogue/calculator but keeps history.
+    const hasAdminToken = Boolean(sessionStorage.getItem("criAdminToken"));
+    document.querySelectorAll(".credit-card-tile[data-card-id]").forEach(tile => {
+      const cardId = tile.dataset.cardId;
+      const card = allCards.find(item => item.id === cardId);
+      if (!card) return;
+      const actions = document.createElement("div");
+      actions.className = "card-admin-actions";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "button button-danger card-archive-button";
+      button.textContent = hasAdminToken ? "Archive card" : "Admin access required";
+      button.disabled = !hasAdminToken;
+      button.title = hasAdminToken
+        ? "Hide this card from the catalogue and calculator while retaining its source and rule history."
+        : "Open Source Review, enter the admin token, then return here to manage cards.";
+      button.addEventListener("click", async () => {
+        if (!hasAdminToken) return;
+        const message = `Archive ${card.issuer} — ${card.name}?\\n\\nIt will disappear from the catalogue and calculator. Rules and source history will be retained. You can archive one of the duplicates and keep the other.`;
+        if (!window.confirm(message)) return;
+        button.disabled = true;
+        button.textContent = "Archiving…";
+        try {
+          const response = await C.request(`/admin/cards/${encodeURIComponent(card.id)}/archive`, {
+            method: "POST",
+            body: JSON.stringify({})
+          });
+          allCards = allCards.filter(item => item.id !== card.id);
+          const cardOption = [...issuer.options].find(option => option.value === card.issuer);
+          const issuerStillPresent = allCards.some(item => item.issuer === card.issuer);
+          if (!issuerStillPresent && cardOption) cardOption.remove();
+          render();
+          window.alert(response.message || "Card archived.");
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = "Archive card";
+          window.alert(error.message || "Could not archive card.");
+        }
+      });
+      actions.appendChild(button);
+      tile.appendChild(actions);
+    });
   }
   try {
     const { cards } = await C.request("/cards");

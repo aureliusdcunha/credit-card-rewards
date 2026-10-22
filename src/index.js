@@ -523,6 +523,30 @@ async function handleApi(request, env) {
     try { return json({ drafts: await getDrafts(env), persisted: true }); }
     catch (error) { return json({ error: "Unable to query drafts from D1." }, 500); }
   }
+  const archiveCardMatch = path.match(/^\/api\/admin\/cards\/([^/]+)\/archive$/);
+  if (method === "POST" && archiveCardMatch) {
+    const adminError = await requireAdmin(request, env);
+    if (adminError) return adminError;
+    if (!env.DB) return json({ error: "D1 is not configured. Card archiving requires the catalogue database." }, 503);
+
+    const cardId = decodeURIComponent(archiveCardMatch[1]);
+    const card = await env.DB.prepare("SELECT id, issuer, name, status FROM cards WHERE id = ?").bind(cardId).first();
+    if (!card) return json({ error: "Card not found." }, 404);
+    if (card.status === "archived") {
+      return json({ ok: true, cardId, alreadyArchived: true, message: "This card is already archived." });
+    }
+
+    const result = await env.DB.prepare("UPDATE cards SET status = 'archived', updated_at = ? WHERE id = ? AND status != 'archived'")
+      .bind(new Date().toISOString(), cardId).run();
+    if (!result.meta?.changes) return json({ error: "Card was not archived. Refresh the catalogue and try again." }, 409);
+    return json({
+      ok: true,
+      cardId,
+      archivedCard: { issuer: card.issuer, name: card.name },
+      message: "Card archived from the catalogue and calculator. Its rules and source history were retained."
+    });
+  }
+
   const approvalMatch = path.match(/^\/api\/admin\/drafts\/([^/]+)\/approve$/);
   if (method === "POST" && approvalMatch) return approveDraft(request, env, decodeURIComponent(approvalMatch[1]));
   const rejectMatch = path.match(/^\/api\/admin\/drafts\/([^/]+)\/reject$/);
