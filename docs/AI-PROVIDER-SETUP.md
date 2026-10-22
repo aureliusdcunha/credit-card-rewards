@@ -24,7 +24,7 @@ Google's pricing documentation says content submitted under the free tier may be
 
 ## Cloudflare AI and PDF conversion
 
-If both GEMINI_API_KEY and the Cloudflare AI binding exist, Gemini handles card-rule extraction. The Cloudflare AI binding is still used to convert PDFs to readable text when an official source is a PDF. Health reports this separately as pdfConversionConfigured.
+If GEMINI_API_KEY is set, Gemini handles both card-rule extraction and PDF text extraction, so the Cloudflare AI binding is not needed for extraction. If GEMINI_API_KEY is absent, the Worker falls back to Cloudflare Workers AI for extraction and PDF conversion. Health reports the active provider and PDF converter separately.
 
 If GEMINI_API_KEY is absent, the Worker falls back to Cloudflare Workers AI for extraction. The key is never sent to the browser; requests are made server-side by the Worker.
 
