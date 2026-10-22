@@ -16,11 +16,56 @@
   const reviewMessage = document.getElementById("review-message");
   const draftList = document.getElementById("draft-list");
   const cardSelect = document.getElementById("source-card");
+  const discoverIssuerInput = document.getElementById("discover-issuer");
+  const discoverCardNameInput = document.getElementById("discover-card-name");
+  const sourceCardContext = document.getElementById("source-card-context");
+  const sourceLaunchParams = new URLSearchParams(window.location.search);
+  const linkedIssuer = String(sourceLaunchParams.get("issuer") || "").trim();
+  const linkedCardName = String(sourceLaunchParams.get("cardName") || "").trim();
+  const linkedCardId = String(sourceLaunchParams.get("cardId") || "").trim();
+  const hasLinkedCardContext = Boolean(linkedIssuer || linkedCardName || linkedCardId);
+  let linkedCardResolved = !linkedCardId;
   let cards = [];
   let currentDraftId = null;
   let currentSourceUrl = "";
   let currentSourceTitle = "";
   let currentCardId = "";
+
+  // The card detail modal links here with the exact card ID. Fill the discovery
+  // fields immediately; resolve the existing card against the loaded catalogue
+  // before allowing extraction so the user does not accidentally create a duplicate.
+  if (linkedIssuer) discoverIssuerInput.value = linkedIssuer;
+  if (linkedCardName) discoverCardNameInput.value = linkedCardName;
+
+  function showLinkedCardContext(message, isWarning = false) {
+    if (!sourceCardContext || !hasLinkedCardContext) return;
+    sourceCardContext.hidden = false;
+    sourceCardContext.classList.toggle("is-warning", isWarning);
+    sourceCardContext.textContent = message;
+  }
+
+  function resolveLinkedCardSelection() {
+    if (!hasLinkedCardContext) return;
+    const norm = value => String(value || "").trim().toLowerCase().replace(/\\s+/g, " ");
+    const matchedCard = (linkedCardId
+      ? cards.find(card => String(card.id) === linkedCardId)
+      : null) || cards.find(card =>
+        (!linkedIssuer || norm(card.issuer) === norm(linkedIssuer)) &&
+        (!linkedCardName || norm(card.name) === norm(linkedCardName))
+      );
+    if (matchedCard) {
+      cardSelect.value = String(matchedCard.id);
+      currentCardId = String(matchedCard.id);
+      linkedCardResolved = true;
+      showLinkedCardContext("Opened from Card Catalogue: " + matchedCard.issuer + " · " + matchedCard.name + ". Existing card selected; extraction and publishing will target this record rather than create a duplicate.");
+      updatePublishButtonLabel();
+      return;
+    }
+    linkedCardResolved = !linkedCardId;
+    currentCardId = "";
+    cardSelect.value = "";
+    showLinkedCardContext("The linked existing card could not be matched in the current catalogue. Refresh the page or choose the correct existing card before extracting; new-card creation is blocked for this link.", true);
+  }
 
   const getToken = () => sessionStorage.getItem("criAdminToken") || "";
   function formatTimingSummary(timingMs) {
@@ -86,6 +131,7 @@
     const response = await C.request("/cards");
     cards = response.cards || [];
     cardSelect.innerHTML = '<option value="">Create a new card from the extracted details</option>' + cards.map(card => `<option value="${C.escapeHtml(card.id)}">${C.escapeHtml(card.issuer)} · ${C.escapeHtml(card.name)}</option>`).join("");
+    resolveLinkedCardSelection();
   }
   async function refreshDrafts(preloadedResponse = null) {
     if (!getToken()) {
@@ -129,7 +175,19 @@
     draftList.innerHTML = '<div class="empty-state"><h3>Admin token required</h3><p>Enter the token to view saved drafts.</p></div>';
   });
   document.getElementById("refresh-drafts").addEventListener("click", refreshDrafts);
-  cardSelect.addEventListener("change", updatePublishButtonLabel);
+  cardSelect.addEventListener("change", () => {
+    if (linkedCardId && cardSelect.value) {
+      const selected = cards.find(card => String(card.id) === String(cardSelect.value));
+      if (selected && (!linkedCardResolved || String(selected.id) !== linkedCardId)) {
+        discoverIssuerInput.value = selected.issuer;
+        discoverCardNameInput.value = selected.name;
+        currentCardId = String(selected.id);
+        linkedCardResolved = true;
+        showLinkedCardContext("Existing card selected: " + selected.issuer + " · " + selected.name + ". Extraction will use this card record.");
+      }
+    }
+    updatePublishButtonLabel();
+  });
   draftJson.addEventListener("input", updatePublishButtonLabel);
 
   discoverForm.addEventListener("submit", async event => {
@@ -140,9 +198,13 @@
       discoverError.textContent = "Enter and verify the admin token before running AI discovery.";
       return;
     }
+    if (linkedCardId && (!linkedCardResolved || !cardSelect.value)) {
+      discoverError.textContent = "The existing card from Card Catalogue is not selected. Resolve the card-selection warning before extracting so a duplicate is not created.";
+      return;
+    }
     const payload = {
-      issuer: document.getElementById("discover-issuer").value.trim(),
-      cardName: document.getElementById("discover-card-name").value.trim(),
+      issuer: discoverIssuerInput.value.trim(),
+      cardName: discoverCardNameInput.value.trim(),
       cardId: cardSelect.value || null
     };
     if (!payload.issuer || !payload.cardName) {
@@ -194,6 +256,12 @@
       sourceText: document.getElementById("source-text").value.trim(),
       cardId: cardSelect.value || null
     };
+    if (linkedCardId && (!linkedCardResolved || !cardSelect.value)) {
+      errorBox.textContent = "The existing card from Card Catalogue is not selected. Resolve the card-selection warning before extracting so a duplicate is not created.";
+      extractButton.disabled = false;
+      extractButton.innerHTML = 'Extract draft with AI <span>→</span>';
+      return;
+    }
     try {
       const response = await C.request("/admin/extract", { method: "POST", body: JSON.stringify(payload) });
       currentDraftId = response.draftId;
