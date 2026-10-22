@@ -46,7 +46,7 @@
 
   function resolveLinkedCardSelection() {
     if (!hasLinkedCardContext) return;
-    const norm = value => String(value || "").trim().toLowerCase().replace(/\\s+/g, " ");
+    const norm = value => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
     const matchedCard = (linkedCardId
       ? cards.find(card => String(card.id) === linkedCardId)
       : null) || cards.find(card =>
