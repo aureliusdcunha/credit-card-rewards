@@ -325,7 +325,7 @@ async function fetchIssuerDiscoveryPage(rawUrl) {
     const response = await fetch(rawUrl, {
       headers: {
         "accept": "text/html,application/xhtml+xml,application/xml,text/xml,text/plain;q=0.9,*/*;q=0.8",
-        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.3.0)"
+        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.3)"
       },
       redirect: "follow",
       ...discoveryTimeoutOptions()
@@ -533,6 +533,27 @@ function knownOfficialFallbacks(issuer, cardName) {
   return [];
 }
 
+const LEGACY_ISSUER_DOMAIN_MAP = [
+  { terms: ["yes bank", "yesbank"], domain: "yesbank.in" },
+  { terms: ["hdfc"], domain: "hdfcbank.com" },
+  { terms: ["icici"], domain: "icicibank.com" },
+  { terms: ["axis"], domain: "axisbank.com" },
+  { terms: ["kotak"], domain: "kotak.com" },
+  { terms: ["idfc"], domain: "idfcfirstbank.com" },
+  { terms: ["indusind"], domain: "indusind.com" },
+  { terms: ["rbl"], domain: "rblbank.com" },
+  { terms: ["hsbc"], domain: "hsbc.co.in" },
+  { terms: ["standard chartered", "stanchart"], domain: "standardchartered.co.in" },
+  { terms: ["federal bank", "federal"], domain: "federalbank.co.in" },
+  { terms: ["au small finance", "au bank", "aubank"], domain: "aubank.in" }
+];
+
+function legacyIssuerDomainFor(issuer, primaryDomain) {
+  const value = String(issuer || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const match = LEGACY_ISSUER_DOMAIN_MAP.find(entry => entry.terms.some(term => value.includes(term)));
+  return match && match.domain !== primaryDomain ? match.domain : null;
+}
+
 export async function discoverOfficialUrls(issuer, cardName) {
   const issuerValue = String(issuer || "").trim().slice(0, 100);
   const cardValue = String(cardName || "").trim().slice(0, 140);
@@ -540,6 +561,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   if (cardValue.length < 2) throw new Error("Enter the exact credit-card name or variant.");
 
   const domain = issuerDomainFor(issuerValue, cardValue);
+  const alternateDomain = domain ? legacyIssuerDomainFor(issuerValue, domain) : null;
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   // For known SBI SimplySAVE, the product page and reward-terms PDF are a
   // verified issuer-owned source set. Return them directly rather than spending
@@ -551,19 +573,25 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const safeIssuer = issuerValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   const queries = domain
     ? [
-        "site:" + domain + " \"" + safeCard + "\" credit card rewards points terms conditions",
-        "site:" + domain + " \"" + safeCard + "\" rewards exclusions annual fee PDF",
-        "site:" + domain + " \"" + safeCard + "\" credit card MITC benefits reward programme",
+        { expectedDomain: domain, query: "site:" + domain + " \"" + safeCard + "\" credit card rewards points terms conditions" },
+        { expectedDomain: domain, query: "site:" + domain + " \"" + safeCard + "\" rewards exclusions annual fee PDF filetype:pdf" },
+        { expectedDomain: domain, query: "site:" + domain + " \"" + safeCard + "\" credit card MITC benefits reward programme" },
         // Search the regulated bank namespace as a secondary source in case the
         // bank publishes card terms on a separate .bank.in subdomain.
         ...(domain.endsWith(".bank.in") ? [
-          "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card terms rewards"
+          { expectedDomain: domain, query: "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card terms rewards" }
+        ] : []),
+        // Several Indian issuers still host useful legacy product pages/PDFs on
+        // their original official domain after moving the main site to .bank.in.
+        ...(alternateDomain ? [
+          { expectedDomain: alternateDomain, query: "site:" + alternateDomain + " \"" + safeCard + "\" credit card rewards terms conditions" },
+          { expectedDomain: alternateDomain, query: "site:" + alternateDomain + " \"" + safeCard + "\" fees MITC benefits terms PDF filetype:pdf" }
         ] : [])
       ]
     : [
-        "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card rewards terms conditions",
-        "site:bank.in \"" + safeIssuer + "\" credit card rewards exclusions annual fee PDF",
-        "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card MITC benefits"
+        { expectedDomain: null, query: "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card rewards terms conditions" },
+        { expectedDomain: null, query: "site:bank.in \"" + safeIssuer + "\" credit card rewards exclusions annual fee PDF" },
+        { expectedDomain: null, query: "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card MITC benefits" }
       ];
 
   const combined = new Map();
@@ -579,12 +607,12 @@ export async function discoverOfficialUrls(issuer, cardName) {
       if (!existing || ranked.score > existing.score) combined.set(ranked.url, ranked);
     }
   };
-  const readSearchResults = async (url, headers, parser) => {
+  const readSearchResults = async (url, headers, parser, expectedDomain = domain) => {
     try {
       const response = await fetch(url, { headers, ...discoveryTimeoutOptions(4500) });
       if (!response.ok) return [];
       const body = (await response.text()).slice(0, 1200000);
-      return parser(body, domain);
+      return parser(body, expectedDomain);
     } catch {
       return [];
     }
@@ -592,30 +620,39 @@ export async function discoverOfficialUrls(issuer, cardName) {
 
   // Search providers are queried concurrently. Source URLs are still restricted
   // to a known issuer domain or to the RBI-reserved .bank.in namespace.
-  const primaryResults = await Promise.all(queries.map(query =>
+  const primaryResults = await Promise.all(queries.map(item =>
     readSearchResults(
-      "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
-      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.3.0" },
-      parseDuckDuckGoResults
+      "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(item.query),
+      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.3" },
+      parseDuckDuckGoResults,
+      item.expectedDomain
     )
   ));
   for (const results of primaryResults) mergeResults(results);
 
   if (!combined.size) {
+    const fallbackQueries = [
+      ...queries.slice(0, 2),
+      ...(alternateDomain ? queries.filter(item => item.expectedDomain === alternateDomain).slice(0, 1) : [])
+    ];
     const fallbackRequests = [
-      ...queries.slice(0, 2).map(query => ({
-        url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query),
-        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.3.0)" },
+      ...fallbackQueries.map(item => ({
+        query: item.query,
+        expectedDomain: item.expectedDomain,
+        url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(item.query),
+        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.3)" },
         parser: parseDuckDuckGoLiteResults
       })),
-      ...queries.slice(0, 2).map(query => ({
-        url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
-        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.3.0)" },
+      ...fallbackQueries.map(item => ({
+        query: item.query,
+        expectedDomain: item.expectedDomain,
+        url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(item.query),
+        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.3)" },
         parser: parseBingRssResults
       }))
     ];
     const fallbackResults = await Promise.all(fallbackRequests.map(request =>
-      readSearchResults(request.url, request.headers, request.parser)
+      readSearchResults(request.url, request.headers, request.parser, request.expectedDomain)
     ));
     for (const results of fallbackResults) mergeResults(results);
   }
