@@ -67,3 +67,26 @@ test("Source Review offers a metadata-only publish path when the draft has no co
   assert.ok(sourceScript.includes("Save details (keep existing rules)"));
   assert.ok(sourceScript.includes("No complete earning rule was available"));
 });
+
+
+test("package version, every page cache-buster, all page footers and the visible pill match the release", async () => {
+  const { version: packageVersion } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(packageVersion, APP_VERSION);
+
+  const publicDir = new URL("../public/", import.meta.url);
+  const { readdir } = await import("node:fs/promises");
+  const htmlPages = (await readdir(publicDir)).filter(name => name.endsWith(".html"));
+  assert.ok(htmlPages.length >= 5, "all public pages should be checked");
+
+  for (const page of htmlPages) {
+    const html = await readFile(new URL("../public/" + page, import.meta.url), "utf8");
+    assert.ok(html.includes("v" + APP_VERSION + " · build " + APP_BUILD), page + " footer must match the current release");
+    for (const match of html.matchAll(/\\?v=([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)/g)) {
+      assert.equal(match[1], APP_VERSION + ".0", page + " asset cache-busters must match the current release");
+    }
+  }
+
+  const layout = await readFile(new URL("../public/js/layout.js", import.meta.url), "utf8");
+  assert.ok(layout.includes('const APP_VERSION = "' + APP_VERSION + '";'));
+  assert.ok(layout.includes('const APP_BUILD = "' + APP_BUILD + '";'));
+});
