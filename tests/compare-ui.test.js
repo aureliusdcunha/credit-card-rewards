@@ -70,7 +70,7 @@ test("reward-points tab compares the same transaction through the existing calcu
   assert.ok(html.includes('id="compare-results"'));
   assert.ok(js.includes('C.request("/calculate"'));
   assert.ok(js.includes("cardId: card.id, amount, category, purchaseDate: date"));
-  assert.ok(js.includes("Only approved rules"));
+  assert.ok(js.includes("Only approved earning rules are shown"));
 });
 
 test("comparison treats missing fees and metadata as unknown, not zero", async () => {
