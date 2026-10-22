@@ -7,7 +7,7 @@ function fromDbCard(row) {
     id: row.id,
     issuer: row.issuer,
     name: row.name,
-    network: row.network || "Not specified",
+    network: row.network && !/^(?:not specified|not recorded|unknown)$/i.test(String(row.network).trim()) ? String(row.network).trim() : null,
     rewardCurrency: row.reward_currency || "Rewards",
     annualFee: row.annual_fee == null ? null : Number(row.annual_fee),
     joiningFee: row.joining_fee == null ? null : Number(row.joining_fee),
