@@ -589,6 +589,8 @@ async function autoExtractCardWithTrace(request, env, trace) {
     // For non-HDFC cards, use at most one successfully read PDF as supplementary context.
     if (!isHdfcRegalia && selectedSources.length > sourcesBeforePdf) break;
   }
+  trace.timings.sourceReadMs = Date.now() - sourceReadStartedAt;
+
   // A supplied product URL is a preferred starting point, not a single-source dead end.
   // If its server-rendered HTML and linked terms did not yield readable text, try
   // relevant same-issuer links first, then fall back to normal official-source search.
@@ -672,14 +674,16 @@ async function autoExtractCardWithTrace(request, env, trace) {
     }
   }
 
-  trace.timings.sourceReadMs = (trace.timings.sourceReadMs || 0) + (Date.now() - sourceReadStartedAt);
   if (!selectedSources.length) {
     const details = sourceErrors.length
       ? " Details: " + sourceErrors.slice(0, 3).join(" | ")
       : " The candidates returned too little readable text.";
-    const linkedCandidates = htmlOutcomes.flatMap(outcome =>
-      (outcome.relatedUrls || []).map(item => ({ title: item.title, url: item.url, score: item.score || 0 }))
-    );
+    const linkedCandidates = [
+      ...htmlOutcomes.flatMap(outcome =>
+        (outcome.relatedUrls || []).map(item => ({ title: item.title, url: item.url, score: item.score || 0 }))
+      ),
+      ...fallbackRelatedCandidates.map(item => ({ title: item.title || "Related official issuer source", url: item.url, score: item.score || 0 }))
+    ];
     const allDiagnosticCandidates = [...candidates, ...linkedCandidates].filter((item, index, all) =>
       all.findIndex(other => other.url === item.url) === index
     );
