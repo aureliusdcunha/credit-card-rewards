@@ -1,14 +1,14 @@
 export const OFFICIAL_DOMAINS = [
   "axisbank.com", "axis.bank.in", "hdfcbank.com", "hdfc.bank.in", "icicibank.com", "sbicard.com", "sbi.co.in",
   "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
-  "hsbc.co.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
+  "hsbc.co.in", "icici.bank.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
   "federalbank.co.in", "aubank.in", "au.bank.in", "standardchartered.co.in"
 ];
 
 const ISSUER_DOMAIN_MAP = [
   { terms: ["axis"], domain: "axis.bank.in" },
   { terms: ["hdfc"], domain: "hdfc.bank.in" },
-  { terms: ["icici"], domain: "icicibank.com" },
+  { terms: ["icici"], domain: "icici.bank.in" },
   { terms: ["sbi", "state bank", "sbicard"], domain: "sbicard.com" },
   { terms: ["kotak"], domain: "kotak.com" },
   { terms: ["idfc"], domain: "idfcfirstbank.com" },
@@ -149,6 +149,22 @@ export function parseBingRssResults(xml, expectedDomain = null) {
 function knownOfficialFallbacks(issuer, cardName) {
   const issuerText = String(issuer || "").toLowerCase();
   const cardText = String(cardName || "").toLowerCase();
+  if (issuerText.includes("icici") && cardText.includes("sapphiro")) {
+    return [
+      {
+        url: "https://www.icici.bank.in/personal-banking/cards/credit-card/sapphiro-card",
+        title: "ICICI Bank Sapphiro Credit Card — rewards, fees and benefits",
+        domain: "www.icici.bank.in",
+        score: 125
+      },
+      {
+        url: "https://www.icici.bank.in/ishop/faqs",
+        title: "ICICI Bank iShop FAQs — accelerated reward points and booking conditions",
+        domain: "www.icici.bank.in",
+        score: 115
+      }
+    ];
+  }
   if (issuerText.includes("hdfc") && cardText.includes("regalia") && cardText.includes("gold")) {
     return [
       {
