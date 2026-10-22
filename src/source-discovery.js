@@ -83,6 +83,20 @@ function resultMatchesIssuer(result, issuer) {
   return tokens.length > 0 && tokens.some(token => searchable.includes(token));
 }
 
+function guessedIssuerBankDomains(issuer) {
+  const words = String(issuer || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter(token => token && !["limited", "ltd", "private", "public", "pvt", "plc", "the", "of", "and", "india"].includes(token));
+  const fullName = words.join("");
+  const withoutBank = words.filter(token => token !== "bank").join("");
+  return [...new Set([fullName, withoutBank])]
+    .filter(slug => slug.length >= 3)
+    .map(slug => slug + ".bank.in")
+    .slice(0, 2);
+}
+
 function decodeHtml(value) {
   return String(value || "")
     .replace(/&amp;/gi, "&").replace(/&quot;/gi, '"')
@@ -577,10 +591,17 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const hasCardMatch = [...combined.values()].some(result =>
     issuerCandidateScore(result.title, result.url, cardValue) > 0
   );
-  if (!hasCardMatch && domain) {
-    for (const result of await discoverIssuerSiteUrls(domain, cardValue)) {
-      const existing = combined.get(result.url);
-      if (!existing || result.score > existing.score) combined.set(result.url, result);
+  if (!hasCardMatch) {
+    const fallbackDomains = domain ? [domain] : guessedIssuerBankDomains(issuerValue);
+    const sitemapCandidates = await Promise.all(
+      fallbackDomains.map(candidateDomain => discoverIssuerSiteUrls(candidateDomain, cardValue))
+    );
+    for (const candidates of sitemapCandidates) {
+      for (const result of candidates) {
+        if (!domain && !resultMatchesIssuer(result, issuerValue)) continue;
+        const existing = combined.get(result.url);
+        if (!existing || result.score > existing.score) combined.set(result.url, result);
+      }
     }
   }
 
