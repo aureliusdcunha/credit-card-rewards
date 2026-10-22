@@ -1,30 +1,51 @@
 export const OFFICIAL_DOMAINS = [
-  "axisbank.com", "axis.bank.in", "hdfcbank.com", "hdfc.bank.in", "icicibank.com", "sbicard.com", "sbi.co.in",
+  // Indian bank websites migrated to RBI's reserved .bank.in namespace.
+  "axis.bank.in", "hdfc.bank.in", "icici.bank.in", "sbi.bank.in", "kotak.bank.in",
+  "idfcfirst.bank.in", "indusind.bank.in", "rbl.bank.in", "yes.bank.in", "hsbc.bank.in",
+  "sc.bank.in", "standardchartered.co.in", "federal.bank.in", "au.bank.in",
+  "bandhan.bank.in", "csb.bank.in", "pnb.bank.in", "canarabank.bank.in",
+  "bankofbaroda.bank.in", "bankofindia.bank.in", "indianbank.bank.in",
+  "unionbankofindia.bank.in", "bankofmaharashtra.bank.in",
+  // Credit-card businesses / official legacy URLs that are not the bank's own domain.
+  "axisbank.com", "hdfcbank.com", "icicibank.com", "sbicard.com", "sbi.co.in",
   "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
-  "hsbc.co.in", "icici.bank.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
-  "federalbank.co.in", "aubank.in", "au.bank.in", "standardchartered.co.in", "sc.bank.in"
+  "hsbc.co.in", "icicibank.com", "americanexpress.com", "amex.co.in", "bobfinancial.com",
+  "federalbank.co.in", "aubank.in", "standardchartered.co.in"
 ];
 
 const ISSUER_DOMAIN_MAP = [
-  { terms: ["axis"], domain: "axis.bank.in" },
+  { terms: ["axis bank", "axis"], domain: "axis.bank.in" },
   { terms: ["hdfc"], domain: "hdfc.bank.in" },
   { terms: ["icici"], domain: "icici.bank.in" },
-  { terms: ["sbi", "state bank", "sbicard"], domain: "sbicard.com" },
-  { terms: ["kotak"], domain: "kotak.com" },
-  { terms: ["idfc"], domain: "idfcfirstbank.com" },
-  { terms: ["indusind"], domain: "indusind.com" },
-  { terms: ["rbl"], domain: "rblbank.com" },
-  { terms: ["yes bank", "yesbank"], domain: "yesbank.in" },
-  { terms: ["hsbc"], domain: "hsbc.co.in" },
+  { terms: ["sbi card", "sbicard"], domain: "sbicard.com" },
+  { terms: ["state bank of india", "state bank", "sbi"], domain: "sbi.bank.in" },
+  { terms: ["kotak"], domain: "kotak.bank.in" },
+  { terms: ["idfc"], domain: "idfcfirst.bank.in" },
+  { terms: ["indusind"], domain: "indusind.bank.in" },
+  { terms: ["rbl"], domain: "rbl.bank.in" },
+  { terms: ["yes bank", "yesbank"], domain: "yes.bank.in" },
+  { terms: ["hsbc"], domain: "hsbc.bank.in" },
   { terms: ["american express", "amex"], domain: "americanexpress.com" },
-  { terms: ["bank of baroda", "bob financial", "bobcard"], domain: "bobfinancial.com" },
-  { terms: ["federal bank", "federal"], domain: "federalbank.co.in" },
-  { terms: ["au small finance", "au bank", "aubank"], domain: "aubank.in" },
-  { terms: ["standard chartered", "stanchart", "standardchartered"], domain: "sc.bank.in" }
+  { terms: ["bob financial", "bobfinancial", "bobcard"], domain: "bobfinancial.com" },
+  { terms: ["bank of baroda"], domain: "bankofbaroda.bank.in" },
+  { terms: ["federal bank", "federal"], domain: "federal.bank.in" },
+  { terms: ["au small finance", "au bank", "aubank"], domain: "au.bank.in" },
+  { terms: ["standard chartered", "stanchart", "standardchartered"], domain: "sc.bank.in" },
+  { terms: ["bandhan"], domain: "bandhan.bank.in" },
+  { terms: ["csb"], domain: "csb.bank.in" },
+  { terms: ["punjab national bank", "pnb"], domain: "pnb.bank.in" },
+  { terms: ["canara bank", "canarabank"], domain: "canarabank.bank.in" },
+  { terms: ["bank of india"], domain: "bankofindia.bank.in" },
+  { terms: ["indian bank"], domain: "indianbank.bank.in" },
+  { terms: ["union bank"], domain: "unionbankofindia.bank.in" },
+  { terms: ["bank of maharashtra"], domain: "bankofmaharashtra.bank.in" }
 ];
 
 export function hostIsAllowed(hostname) {
   const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
+  // The .bank.in namespace is reserved for regulated Indian banks. Any discovered
+  // bank host is still constrained to HTTPS and separately scoped to the issuer.
+  if (host === "bank.in" || host.endsWith(".bank.in")) return true;
   return OFFICIAL_DOMAINS.some(domain => host === domain || host.endsWith("." + domain));
 }
 
@@ -41,6 +62,25 @@ export function issuerDomainFor(issuer) {
   const value = String(issuer || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const match = ISSUER_DOMAIN_MAP.find(entry => entry.terms.some(term => value.includes(term)));
   return match ? match.domain : null;
+}
+
+function issuerSearchTokens(issuer) {
+  return String(issuer || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter(token => token.length > 1 && !["bank", "limited", "ltd", "private", "public", "of", "and", "the", "india", "small", "finance"].includes(token));
+}
+
+function resultMatchesIssuer(result, issuer) {
+  let url;
+  try { url = new URL(result.url); } catch { return false; }
+  if (!(url.hostname === "bank.in" || url.hostname.endsWith(".bank.in"))) return false;
+  const searchable = (String(result.title || "") + " " + url.hostname + " " + url.pathname)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ");
+  const tokens = issuerSearchTokens(issuer);
+  return tokens.length > 0 && tokens.some(token => searchable.includes(token));
 }
 
 function decodeHtml(value) {
@@ -454,18 +494,40 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const cardValue = String(cardName || "").trim().slice(0, 140);
   if (issuerValue.length < 2) throw new Error("Enter the bank or card issuer.");
   if (cardValue.length < 2) throw new Error("Enter the exact credit-card name or variant.");
+
   const domain = issuerDomainFor(issuerValue);
-  if (!domain) throw new Error("Automatic URL discovery is not configured for this issuer yet. Check the issuer name and try again; a URL can still be supplied as an optional fallback.");
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
-  const queries = [
-    "site:" + domain + " \"" + safeCard + "\" credit card rewards points terms conditions",
-    "site:" + domain + " \"" + safeCard + "\" rewards exclusions annual fee PDF",
-    "site:" + domain + " \"" + safeCard + "\" credit card MITC benefits reward programme"
+  const safeIssuer = issuerValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
+  const productQueries = [
+    "\"" + safeIssuer + "\" \"" + safeCard + "\" credit card rewards points terms conditions",
+    "\"" + safeIssuer + "\" \"" + safeCard + "\" rewards exclusions annual fee PDF",
+    "\"" + safeIssuer + "\" \"" + safeCard + "\" credit card MITC benefits reward programme"
   ];
+  const queries = domain
+    ? [
+        "site:" + domain + " \"" + safeCard + "\" credit card rewards points terms conditions",
+        "site:" + domain + " \"" + safeCard + "\" rewards exclusions annual fee PDF",
+        "site:" + domain + " \"" + safeCard + "\" credit card MITC benefits reward programme",
+        // Search the regulated bank namespace as a secondary source in case the
+        // bank publishes card terms on a separate .bank.in subdomain.
+        ...(domain.endsWith(".bank.in") ? [
+          "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card terms rewards"
+        ] : [])
+      ]
+    : [
+        "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card rewards terms conditions",
+        "site:bank.in \"" + safeIssuer + "\" credit card rewards exclusions annual fee PDF",
+        "site:bank.in \"" + safeIssuer + "\" \"" + safeCard + "\" credit card MITC benefits"
+      ];
+
   const combined = new Map();
   const mergeResults = results => {
     for (const result of results) {
+      if (!domain && !resultMatchesIssuer(result, issuerValue)) continue;
       const cardScore = issuerCandidateScore(result.title, result.url, cardValue);
+      // Without a mapping, require the result to be both on the regulated
+      // bank namespace and associated with the requested issuer.
+      if (!domain && cardScore <= 0) continue;
       const ranked = { ...result, score: Math.max(Number(result.score || 0), cardScore) };
       const existing = combined.get(ranked.url);
       if (!existing || ranked.score > existing.score) combined.set(ranked.url, ranked);
@@ -473,10 +535,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   };
   const readSearchResults = async (url, headers, parser) => {
     try {
-      const response = await fetch(url, {
-        headers,
-        ...discoveryTimeoutOptions(6500)
-      });
+      const response = await fetch(url, { headers, ...discoveryTimeoutOptions(6500) });
       if (!response.ok) return [];
       const body = (await response.text()).slice(0, 1200000);
       return parser(body, domain);
@@ -485,8 +544,8 @@ export async function discoverOfficialUrls(issuer, cardName) {
     }
   };
 
-  // All primary queries run concurrently so a slow provider does not serialise
-  // three otherwise independent issuer-specific searches.
+  // Search providers are queried concurrently. Source URLs are still restricted
+  // to a known issuer domain or to the RBI-reserved .bank.in namespace.
   const primaryResults = await Promise.all(queries.map(query =>
     readSearchResults(
       "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
@@ -496,8 +555,6 @@ export async function discoverOfficialUrls(issuer, cardName) {
   ));
   for (const results of primaryResults) mergeResults(results);
 
-  // Search pages can change format or be bot-protected. Probe both fallback
-  // formats concurrently; every returned URL still passes the issuer allow-list.
   if (!combined.size) {
     const fallbackRequests = [
       ...queries.slice(0, 2).map(query => ({
@@ -517,25 +574,28 @@ export async function discoverOfficialUrls(issuer, cardName) {
     for (const results of fallbackResults) mergeResults(results);
   }
 
-  // If search results do not identify the requested card, inspect the issuer's
-  // own sitemap/catalogue. This is generic across cards—no URL per card required.
   const hasCardMatch = [...combined.values()].some(result =>
     issuerCandidateScore(result.title, result.url, cardValue) > 0
   );
-  if (!hasCardMatch) {
+  if (!hasCardMatch && domain) {
     for (const result of await discoverIssuerSiteUrls(domain, cardValue)) {
       const existing = combined.get(result.url);
       if (!existing || result.score > existing.score) combined.set(result.url, result);
     }
   }
 
-  // Retain known verified landing pages as a final fallback for particularly
-  // important cards, without requiring a new hardcoded entry for every card.
+  // If an issuer is not explicitly mapped, try URLs found on the issuer's
+  // own official domain only after a matching .bank.in page was found above.
+  // Known URLs remain useful fallbacks for cards with unusually sparse indexing.
   mergeResults(knownOfficialFallbacks(issuerValue, cardValue));
 
   const results = [...combined.values()].sort((a, b) => b.score - a.score).slice(0, 12);
   if (!results.length) {
-    throw new Error("No matching official issuer card page was found by search or the issuer sitemap/catalogue. Check the bank and card name and retry; pasting a URL is optional fallback.");
+    throw new Error(
+      domain
+        ? "No matching official issuer card page was found by search or the issuer sitemap/catalogue. Retry later; entering a URL is optional fallback."
+        : "Search did not find a matching card page on a recognised .bank.in domain. Check the issuer and card name, then retry; entering a URL is optional fallback."
+    );
   }
   return results;
 }
