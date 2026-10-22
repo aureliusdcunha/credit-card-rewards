@@ -186,12 +186,41 @@ async function requireAdmin(request, env) {
 }
 async function persistDraft(env, data) {
   if (!env.DB) return { id: `local-${crypto.randomUUID()}`, persisted: false };
+  const extractedJson = JSON.stringify(data.extracted);
+  const now = new Date().toISOString();
+
+  // Repeated automatic extraction for the same issuer/card updates the latest pending
+  // draft and marks older duplicates superseded, instead of growing a queue of copies.
+  if (data.deduplicatePending) {
+    const pending = await env.DB.prepare(`SELECT id, card_id, source_url, extracted_json, created_at
+      FROM extraction_drafts WHERE status = 'needs_review' ORDER BY created_at DESC LIMIT 200`).all();
+    const incomingRow = { card_id: data.cardId || null, source_url: data.sourceUrl, extracted_json: extractedJson };
+    const incomingKey = draftIdentity(incomingRow);
+    const matches = (pending.results || []).filter(row => {
+      const key = draftIdentity(row);
+      return Boolean(incomingKey && key && key === incomingKey);
+    });
+    if (matches.length) {
+      const keeper = matches[0];
+      await env.DB.prepare(`UPDATE extraction_drafts
+        SET card_id = ?, source_url = ?, source_title = ?, source_excerpt = ?, extracted_json = ?, created_at = ?
+        WHERE id = ? AND status = 'needs_review'`)
+        .bind(data.cardId || null, data.sourceUrl, data.sourceTitle || "Official terms", data.sourceExcerpt.slice(0, 8000), extractedJson, now, keeper.id)
+        .run();
+      for (const duplicate of matches.slice(1)) {
+        await env.DB.prepare("UPDATE extraction_drafts SET status = 'superseded' WHERE id = ? AND status = 'needs_review'")
+          .bind(duplicate.id).run();
+      }
+      return { id: keeper.id, persisted: true, deduplicated: true };
+    }
+  }
+
   const id = crypto.randomUUID();
   await env.DB.prepare(`INSERT INTO extraction_drafts (id, card_id, source_url, source_title, source_excerpt, extracted_json, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'needs_review', ?)`)
-    .bind(id, data.cardId || null, data.sourceUrl, data.sourceTitle || "Official terms", data.sourceExcerpt.slice(0, 8000), JSON.stringify(data.extracted), new Date().toISOString())
+    .bind(id, data.cardId || null, data.sourceUrl, data.sourceTitle || "Official terms", data.sourceExcerpt.slice(0, 8000), extractedJson, now)
     .run();
-  return { id, persisted: true };
+  return { id, persisted: true, deduplicated: false };
 }
 async function aiExtract(request, env) {
   const adminError = await requireAdmin(request, env);
@@ -239,11 +268,12 @@ async function aiExtract(request, env) {
     sourceUrl: intake.sourceUrl,
     sourceTitle: sourceTitle || "Official bank terms",
     sourceExcerpt: sourceText,
-    extracted
+    extracted,
+    deduplicatePending: body.deduplicatePending === true
   };
   try {
     const saved = await persistDraft(env, draftData);
-    return json({ ok: true, draftId: saved.id, persisted: saved.persisted, status: "needs_review", sourceUrl: intake.sourceUrl, sourceTitle: draftData.sourceTitle, sourceExcerpt: sourceText.slice(0, 1600), extracted, aiModel: MODEL, warning: "AI extraction is a draft only. Review each source quote, rule, exclusion, effective date and cap before publishing." });
+    return json({ ok: true, draftId: saved.id, persisted: saved.persisted, deduplicated: saved.deduplicated === true, status: "needs_review", sourceUrl: intake.sourceUrl, sourceTitle: draftData.sourceTitle, sourceExcerpt: sourceText.slice(0, 1600), extracted, aiModel: MODEL, warning: "AI extraction is a draft only. Review each source quote, rule, exclusion, effective date and cap before publishing." });
   } catch (error) {
     console.error("Unable to store extraction draft:", error?.message || error);
     return json({ error: "AI extraction succeeded, but the draft could not be saved to D1. Configure the database and retry." }, 500);
