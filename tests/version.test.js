@@ -59,3 +59,11 @@ test("Source Review displays stage timings returned by automatic extraction", as
   assert.ok(sourceScript.includes("timingMs.sourceReadMs"));
   assert.ok(sourceScript.includes("timingMs.aiExtractionMs"));
 });
+
+
+test("Source Review offers a metadata-only publish path when the draft has no complete earning rules", async () => {
+  const sourceScript = await readFile(new URL("../public/js/sources.js", import.meta.url), "utf8");
+  assert.ok(sourceScript.includes("Create card from details"));
+  assert.ok(sourceScript.includes("Save details (keep existing rules)"));
+  assert.ok(sourceScript.includes("No complete earning rule was available"));
+});
