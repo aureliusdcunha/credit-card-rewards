@@ -70,5 +70,42 @@
       </div>
     </article>`;
   }
-  window.CRI = { request, escapeHtml, formatINR, formatNumber, prettyCategory, statusLabel, statusPill, renderCardTile, bankClass, initials };
+  function catalogueDataWarning(health, cards) {
+    const records = Array.isArray(cards) ? cards : [];
+    if (!health || health.mode !== "d1") {
+      return {
+        tone: "warning",
+        title: "Demonstration data is not authoritative.",
+        message: "The app is using its starter catalogue because a production D1 database is not connected. Do not use example reward rules for payment decisions."
+      };
+    }
+
+    const hasDemoStatus = item => item && item.status === "demo";
+    const demoCards = records.filter(card =>
+      card.reviewStatus === "demo" ||
+      [...(card.rules || []), ...(card.benefits || []), ...(card.exclusions || [])].some(hasDemoStatus)
+    );
+    if (demoCards.length) {
+      return {
+        tone: "warning",
+        title: "Some demonstration rules are present.",
+        message: demoCards.length + " card record(s) contain provisional demonstration data. Verify the exact variant, exclusions, caps and effective dates before relying on those entries."
+      };
+    }
+
+    const cardsNeedingReview = records.filter(card =>
+      ["needs_review", "no_verified_rules"].includes(String(card.reviewStatus || "")) ||
+      (card.rules || []).some(rule => ["demo", "needs_review"].includes(String(rule.status || "")))
+    );
+    if (cardsNeedingReview.length) {
+      return {
+        tone: "neutral",
+        title: "Some card records need review.",
+        message: cardsNeedingReview.length + " card record(s) have unverified details or no verified earning rules. Use only reviewed earning rules when estimating rewards."
+      };
+    }
+    return null;
+  }
+
+  window.CRI = { request, escapeHtml, formatINR, formatNumber, prettyCategory, statusLabel, statusPill, renderCardTile, bankClass, initials, catalogueDataWarning };
 })();
