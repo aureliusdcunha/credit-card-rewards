@@ -1,3 +1,5 @@
+import { normalizeRewardUnit } from "./reward-units.js";
+
 const roundDown = (n) => Math.floor(Number(n) + Number.EPSILON);
 const roundRewards = (value, mode = "down") => {
   const n = Number(value);
@@ -143,11 +145,12 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
     };
   }
 
+  const selectedUnit = normalizeRewardUnit(chosen.unit, card.rewardCurrency) || card.rewardCurrency || "Rewards";
   const minTransaction = Math.max(0, numeric(chosen.minTransaction, 0));
   if (spend < minTransaction) {
     return {
       ok: true, excluded: true, cardId: card.id, cardName: card.name, amount: spend,
-      points: 0, rewardUnit: chosen.unit || card.rewardCurrency || "Rewards", valueINR: null,
+      points: 0, rewardUnit: selectedUnit, valueINR: null,
       category, ruleStatus: chosen.status, explanation: `The transaction is below this rule's minimum transaction amount of ₹${minTransaction.toLocaleString("en-IN")}.`,
       notes: chosen.status === "demo" ? ["This result uses unverified demonstration data; confirm the issuer's current minimum and rounding rules."] : [],
       sourceUrl: card.officialUrl || null
@@ -212,9 +215,9 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
     : chosen.category === "general" ? "base" : "category-specific";
   return {
     ok: true, excluded: false, capped, cardId: card.id, cardName: card.name, amount: spend,
-    eligibleAmount, points, rewardUnit: chosen.unit || card.rewardCurrency || "Rewards", valueINR: null,
+    eligibleAmount, points, rewardUnit: selectedUnit, valueINR: null,
     category, rate, perAmount, ruleStatus: ruleIsDemo ? "demo" : "approved",
-    explanation: `${rate} ${chosen.unit || card.rewardCurrency || "rewards"} per ₹${perAmount} under the selected ${ruleDescription} rule.`,
+    explanation: `${rate} ${selectedUnit} per ₹${perAmount} under the selected ${ruleDescription} rule.`,
     notes, sourceUrl: card.officialUrl || null, sourceQuote: chosen.sourceQuote || null
   };
 }
