@@ -98,26 +98,58 @@ function metaDescription(html) {
   return "";
 }
 
+function normalizeHeading(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\\s+/g, " ");
+}
+
+function focusCardSection(html, cardName) {
+  const target = normalizeHeading(cardName);
+  if (!target) return null;
+  const targetTokens = target.split(" ").filter(Boolean);
+  const cleanHtml = String(html || "").replace(OMIT_COMMENTS, " ").replace(OMIT_BLOCKS, " ");
+  const headings = [...cleanHtml.matchAll(/<h([1-6])\\b[^>]*>([\\s\\S]*?)<\\/h\\1\\s*>/gi)].map(match => {
+    const heading = textFromMarkup(match[2]);
+    const normalized = normalizeHeading(heading);
+    const tokens = normalized.split(" ").filter(Boolean);
+    const overlap = targetTokens.filter(token => tokens.includes(token)).length;
+    const coverage = targetTokens.length ? overlap / targetTokens.length : 0;
+    const score = normalized === target ? 1000 : coverage * 100 - Math.abs(tokens.length - targetTokens.length) * 3;
+    return { level: Number(match[1]), index: match.index, end: match.index + match[0].length, heading, normalized, coverage, score };
+  }).filter(item => item.coverage >= 0.75 && item.heading);
+  if (!headings.length) return null;
+  headings.sort((a, b) => b.score - a.score || a.heading.length - b.heading.length);
+  const selected = headings[0];
+  const nextHeading = headings
+    .filter(item => item.index > selected.index && item.level <= selected.level)
+    .sort((a, b) => a.index - b.index)[0];
+  const sectionHtml = cleanHtml.slice(selected.index, nextHeading ? nextHeading.index : cleanHtml.length);
+  return { title: selected.heading, html: sectionHtml, score: selected.score };
+}
+
 export function extractOfficialHtml(html, baseUrl, cardName = "") {
   const raw = String(html || "");
   const titleMatch = raw.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
   const title = textFromMarkup(titleMatch?.[1] || "") || new URL(baseUrl).hostname;
   const description = metaDescription(raw);
-  const jsonText = jsonLdText(raw);
+  const focusedSection = focusCardSection(raw, cardName);
+  const jsonText = focusedSection ? "" : jsonLdText(raw);
 
   const withoutNoise = raw
     .replace(OMIT_COMMENTS, " ")
     .replace(OMIT_BLOCKS, " ")
     .replace(/<div\b[^>]*(?:id|class)\s*=\s*["'][^"']*(?:cookie|consent|privacy-banner|social-share|share-tools|newsletter|modal-overlay|popup-overlay)[^"']*["'][^>]*>[\s\S]*?<\/div\s*>/gi, " ");
+  const extractionHtml = focusedSection ? focusedSection.html : withoutNoise;
 
-  const mainBlocks = [...withoutNoise.matchAll(/<(?:main|article)\b[^>]*>([\s\S]*?)<\/(?:main|article)\s*>/gi)].map(match => textFromMarkup(match[1]));
-  const bodyMatch = withoutNoise.match(/<body\b[^>]*>([\s\S]*?)<\/body\s*>/i);
-  const bodyText = textFromMarkup(bodyMatch?.[1] || withoutNoise);
+  const mainBlocks = [...extractionHtml.matchAll(/<(?:main|article)\b[^>]*>([\s\S]*?)<\/(?:main|article)\s*>/gi)].map(match => textFromMarkup(match[1]));
+  const bodyMatch = extractionHtml.match(/<body\b[^>]*>([\s\S]*?)<\/body\s*>/i);
+  const bodyText = textFromMarkup(bodyMatch?.[1] || extractionHtml);
   const mainText = mainBlocks.sort((a, b) => b.length - a.length)[0] || "";
   const contentText = mainText.length >= 100 ? mainText : bodyText;
   const meaningfulText = [jsonText, contentText].filter(Boolean).join("\n").trim();
   const readableTextLength = meaningfulText.length;
-  const parts = [title, description, meaningfulText].filter(Boolean);
+  const documentTitle = focusedSection ? focusedSection.title : title;
+  const documentDescription = focusedSection ? "" : description;
+  const parts = [documentTitle, documentDescription, meaningfulText].filter(Boolean);
   const text = [...new Set(parts)].join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 
   const links = [];
@@ -152,10 +184,11 @@ export function extractOfficialHtml(html, baseUrl, cardName = "") {
   }
   links.sort((a, b) => b.score - a.score);
   return {
-    title: title.slice(0, 240),
-    description,
+    title: documentTitle.slice(0, 240),
+    description: documentDescription,
     text,
     readableTextLength,
+    focusedCardSection: focusedSection ? focusedSection.title : null,
     relatedUrls: links.slice(0, 12),
     javascriptHeavy: readableTextLength < 100 && /<script\b/i.test(raw)
   };
