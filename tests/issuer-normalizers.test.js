@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeHdfcRegaliaExtraction } from "../src/issuer-normalizers.js";
+import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts } from "../src/issuer-normalizers.js";
 
 const termsUrl = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-travel-edge-tnc.pdf";
 const cardUrl = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
