@@ -411,7 +411,8 @@ test("extracts source-backed SimplySAVE base and accelerated reward rules plus t
   const draft = {
     issuer: "SBI",
     cardName: "simplysave",
-    rewardCurrency: "Reward Points",
+    rewardCurrency: "Rewards",
+    summary: "The SimplySAVE SBI Card carries a fee. Reward rates and card network details are not provided in the supplied text.",
     rules: [],
     benefits: [],
     exclusions: [],
@@ -434,6 +435,9 @@ test("extracts source-backed SimplySAVE base and accelerated reward rules plus t
   assert.equal(base.rate, 1);
   assert.equal(base.perAmount, 150);
   assert.equal(base.unit, "Reward Points");
+  assert.equal(draft.rewardCurrency, "Reward Points");
+  assert.match(draft.summary, /Base and accelerated reward rates were found/i);
+  assert.doesNotMatch(draft.summary, /Reward rates and card network details are not provided/i);
   assert.equal(base.sourceUrl, productUrl);
   for (const rule of draft.rules.filter(rule => rule.category !== "general")) {
     assert.equal(rule.rate, 10);
