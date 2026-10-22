@@ -441,7 +441,23 @@ async function autoExtractCardWithTrace(request, env, trace) {
   const maxSources = isHdfcRegalia ? 4 : isSbiSimplySave ? 3 : 2;
   const isPdfCandidate = candidate => /\.pdf(?:[?#]|$)/i.test(String(candidate.url || "")) ||
     /\bpdf\b/i.test(String(candidate.title || ""));
-  const htmlCandidates = candidates.filter(candidate => !isPdfCandidate(candidate)).slice(0, isSbiSimplySave ? 2 : 5);
+  const htmlCandidates = candidates.filter(candidate => !isPdfCandidate(candidate));
+  if (isHdfcRegalia) {
+    // Reserve one of the four source slots for the reward PDF. Put the official
+    // fees-and-charges page first so the combined "Joining / Renewal Membership
+    // Fee" statement is included rather than relying on an AI guess.
+    const hdfcHtmlPriority = candidate => {
+      const value = (String(candidate.url || "") + " " + String(candidate.title || "")).toLowerCase();
+      if (/fees-and-charges|joining fee|renewal fee|membership fee/.test(value)) return 0;
+      if (/regalia-gold-credit-card/.test(value) && !/feature|lounge|terms-and-conditions/.test(value)) return 1;
+      if (/features\.html/.test(value)) return 2;
+      return 3;
+    };
+    htmlCandidates.sort((a, b) => hdfcHtmlPriority(a) - hdfcHtmlPriority(b) || Number(b.score || 0) - Number(a.score || 0));
+    htmlCandidates.splice(3);
+  } else {
+    htmlCandidates.splice(isSbiSimplySave ? 2 : 5);
+  }
   const pdfCandidates = candidates.filter(isPdfCandidate);
   if (isSbiSimplySave) {
     pdfCandidates.sort((a, b) => {
