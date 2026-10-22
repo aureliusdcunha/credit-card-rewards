@@ -37,7 +37,7 @@ test("comparison matrix covers key card metadata, rules, benefits, restrictions 
   ]) assert.ok(js.includes(label), "missing comparison field: " + label);
   assert.ok(js.includes("Rules for"));
   assert.ok(js.includes("Inspect source evidence") === false); // this screen uses per-rule source quotes instead
-  assert.ok(js.includes("function sourceUrls(card)"));
+  assert.ok(js.includes("const sourceUrls = card =>"));
   assert.ok(js.includes("sourceQuote"));
   assert.ok(js.includes('target="_blank" rel="noopener noreferrer"'));
 });
