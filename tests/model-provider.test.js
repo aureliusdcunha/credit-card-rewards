@@ -81,3 +81,32 @@ test("rejects a successful Gemini response that contains no text", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("sends official PDF bytes to Gemini when inline document extraction is used", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestBody;
+  globalThis.fetch = async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return new Response(JSON.stringify({
+      candidates: [{
+        finishReason: "STOP",
+        content: { parts: [{ text: "Joining Fee: ₹2,500 plus applicable taxes. Annual fee waiver after qualifying annual spend." }] }
+      }]
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const result = await generateWithGemini({
+      GEMINI_API_KEY: "test-key"
+    }, {
+      prompt: "Extract the exact PDF text",
+      inlineData: { mimeType: "application/pdf", data: "JVBERi0xLjQK" },
+      maxOutputTokens: 12000
+    });
+    const filePart = requestBody.contents[0].parts.find(part => part.inlineData);
+    assert.deepEqual(filePart.inlineData, { mimeType: "application/pdf", data: "JVBERi0xLjQK" });
+    assert.match(result.text, /Joining Fee: ₹2,500/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
