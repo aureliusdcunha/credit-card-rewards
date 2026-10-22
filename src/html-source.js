@@ -23,9 +23,17 @@ function safeCodePoint(value) {
 }
 
 function attribute(tag, name) {
-  const pattern = "(?:^|\\s)" + name + "\\s*=\\s*(['\"])([\\s\\S]*?)\\1";
-  const match = String(tag || "").match(new RegExp(pattern, "i"));
-  return match ? decodeHtmlEntities(match[2]).trim() : "";
+  const source = String(tag || "");
+  const patterns = [
+    new RegExp("\\b" + name + "\\s*=\\s*\"([^\"]*)\"", "i"),
+    new RegExp("\\b" + name + "\\s*=\\s*'([^']*)'", "i"),
+    new RegExp("\\b" + name + "\\s*=\\s*([^\\s>]+)", "i")
+  ];
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match) return decodeHtmlEntities(match[1]).trim();
+  }
+  return "";
 }
 
 function issuerRoot(hostname) {
