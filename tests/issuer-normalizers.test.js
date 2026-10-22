@@ -316,7 +316,7 @@ test("extracts an explicitly stated single card network from official source tex
     "Payment network: Visa.",
     "The card earns 4 reward points per ₹100 spent.",
     "SOURCE TEXT END"
-  ].join("\\n");
+  ].join("\n");
   const draft = {
     issuer: "Sample Bank",
     cardName: "Sample Credit Card",
@@ -347,7 +347,7 @@ test("marks multiple explicit card-network variants as variant-dependent", () =>
     "SOURCE TEXT START",
     "The card is available on Visa or Mastercard depending on the selected card variant.",
     "SOURCE TEXT END"
-  ].join("\\n");
+  ].join("\n");
   const draft = {
     issuer: "Sample Bank",
     cardName: "Sample Credit Card",
@@ -371,7 +371,7 @@ test("does not infer a card network from unrelated references to network brands"
     "SOURCE TEXT START",
     "Use your card at any outlet that accepts Visa, Mastercard or RuPay.",
     "SOURCE TEXT END"
-  ].join("\\n");
+  ].join("\n");
   const draft = {
     issuer: "Sample Bank",
     cardName: "Sample Credit Card",
