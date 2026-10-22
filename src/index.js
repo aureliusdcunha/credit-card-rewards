@@ -476,10 +476,11 @@ async function autoExtractCardWithTrace(request, env, trace) {
          (selectedSources.length === 0 || (isHdfcRegalia && selectedSources.length < 3))) {
     trace.stage = "read official PDF fallback " + (pdfIndex + 1);
     const outcome = await readCandidate(pdfCandidates[pdfIndex++]);
+    const sourcesBeforePdf = selectedSources.length;
     mergeReadOutcomes([outcome]);
-    if (outcome.error) continue;
-    // For non-HDFC cards, use at most one PDF as supplementary context.
-    if (!isHdfcRegalia && selectedSources.length > 0) break;
+    if (outcome.error || !outcome.fetched) continue;
+    // For non-HDFC cards, use at most one successfully read PDF as supplementary context.
+    if (!isHdfcRegalia && selectedSources.length > sourcesBeforePdf) break;
   }
   trace.timings.sourceReadMs = Date.now() - sourceReadStartedAt;
   if (!selectedSources.length) {
