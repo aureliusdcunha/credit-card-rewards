@@ -4,6 +4,7 @@ import { discoverOfficialUrls } from "./source-discovery.js";
 import { normalizeDraftRewardUnits } from "./reward-units.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
 import { deduplicatePendingDraftRows, draftIdentity, sameCardIdentity, normalizeIdentityPartForCompare, normalizeSourceUrl } from "./draft-dedupe.js";
+import { APP_VERSION, APP_BUILD } from "./version.js";
 
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_SOURCE_CHARS = 45000;
@@ -497,11 +498,11 @@ async function handleApi(request, env) {
   const method = request.method.toUpperCase();
 
   if (method === "GET" && path === "/api/health") {
-    return json({ ok: true, app: "Credit Card Rewards Intelligence", version: "0.1.0", mode: env.DB ? "d1" : "demo", aiConfigured: Boolean(env.AI && typeof env.AI.run === "function"), adminConfigured: Boolean(env.ADMIN_TOKEN), timestamp: new Date().toISOString() });
+    return json({ ok: true, app: "Credit Card Rewards Intelligence", version: APP_VERSION, build: APP_BUILD, release: `v${APP_VERSION}+${APP_BUILD}`, mode: env.DB ? "d1" : "demo", aiConfigured: Boolean(env.AI && typeof env.AI.run === "function"), adminConfigured: Boolean(env.ADMIN_TOKEN), timestamp: new Date().toISOString() });
   }
   if (method === "GET" && path === "/api/cards") {
     const cards = await getCards(env);
-    return json({ cards, count: cards.length, mode: env.DB ? "d1" : "demo" });
+    return json({ cards, count: cards.length, mode: env.DB ? "d1" : "demo", version: APP_VERSION, build: APP_BUILD });
   }
   if (method === "GET" && path.startsWith("/api/cards/")) {
     const id = decodeURIComponent(path.slice("/api/cards/".length));
