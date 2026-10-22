@@ -155,6 +155,10 @@ test("auto-extraction can read a discovered .bank.in URL using the same validato
     assert.equal(body.extractionMode, "auto-discovery");
     assert.ok(fetchedCardUrls.some(url => url.includes("kotak.bank.in")));
     assert.equal(body.discovery.selectedSource, "https://www.kotak.bank.in/credit-cards/rewards-credit-card");
+    assert.equal(typeof body.timingMs.discoveryMs, "number");
+    assert.equal(typeof body.timingMs.sourceReadMs, "number");
+    assert.equal(typeof body.timingMs.aiExtractionMs, "number");
+    assert.equal(typeof body.timingMs.totalMs, "number");
   } finally {
     globalThis.fetch = originalFetch;
   }
