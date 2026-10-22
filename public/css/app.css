@@ -1167,3 +1167,23 @@ textarea::selection,
 @media(prefers-reduced-motion:reduce) {
   .compare-tab { transition:none; }
 }
+
+
+/* 0.6.3 card-detail to Source Review context */
+.source-card-context {
+  margin: 8px 0 12px;
+  padding: 11px 13px;
+  border: 1px solid #35675d;
+  border-left: 3px solid #55d6b3;
+  border-radius: 6px;
+  background: #142b2a;
+  color: #b7d9d0;
+  font: 10px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+.source-card-context[hidden] { display:none !important; }
+.source-card-context.is-warning {
+  border-color: #826b3c;
+  border-left-color: #eab85e;
+  background: #302718;
+  color: #f1d7a3;
+}
