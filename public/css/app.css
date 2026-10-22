@@ -37,3 +37,11 @@ input,select,textarea{width:100%;border:1px solid #d6e1eb;border-radius:9px;padd
 .compare-diagnostic-item small{display:block;color:var(--muted,#687993);font-size:10px;line-height:1.5;margin-top:3px}
 
 .compare-diagnostic-context{margin-top:8px;color:var(--muted,#687993);font-size:10px;line-height:1.5}
+
+
+/* Full benefit provenance shown in expanded card details */
+.benefit-detail-row{align-items:flex-start}
+.benefit-detail-row>div:first-child{min-width:0;flex:1}
+.benefit-detail-row small{display:block;white-space:normal;overflow-wrap:anywhere;line-height:1.55;margin-top:5px}
+.benefit-detail-row .benefit-source-quote{padding:8px 10px;border-left:3px solid var(--border,#d9e2ef);background:rgba(240,245,251,.72);border-radius:0 7px 7px 0}
+.benefit-detail-row .benefit-source-link{display:inline-flex;margin-top:7px;font-size:11px}
