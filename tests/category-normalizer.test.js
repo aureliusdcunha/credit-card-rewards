@@ -49,7 +49,13 @@ test("recovers a zero perAmount only when the source quote explicitly states a s
   assert.equal(explicitPerAmountFromQuote("Earn 5 EDGE Miles for every INR 100 spent on eligible transactions."), 100);
   assert.equal(explicitPerAmountFromQuote("Earn 3 reward points per ₹1,000 spent."), 1000);
   assert.equal(explicitPerAmountFromQuote("Earn 4 points on every 500 INR spent."), 500);
+  assert.equal(explicitPerAmountFromQuote("Earn 5 points / ₹100 spent on eligible retail purchases."), 100);
+  assert.equal(explicitPerAmountFromQuote("Earn 5 points/ Rs. 100 spent on retail purchases."), 100);
+  assert.equal(explicitPerAmountFromQuote("Earn 5 points for ₹200 spent on eligible transactions."), 200);
+  assert.equal(explicitPerAmountFromQuote("Earn 5 points on INR 250 purchase value."), 250);
+  assert.equal(explicitPerAmountFromQuote("Earn 5 points per ₹100 spent, capped at 1,000 points per month."), 100);
   assert.equal(explicitPerAmountFromQuote("Flights earn bonus EDGE Miles."), null);
+  assert.equal(explicitPerAmountFromQuote("Earn 5 bonus points, with a cap of ₹1,000 per month."), null);
 });
 
 test("repairs perAmount from a quote and annotates the draft for human review", () => {
