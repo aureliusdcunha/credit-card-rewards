@@ -92,7 +92,7 @@ test("auto-extraction refreshes one existing pending draft instead of inserting 
   assert.equal(body.deduplicated, true);
   assert.equal(body.draftId, "pending-newest");
   assert.equal(dbCalls.length, 2);
-  assert.match(dbCalls[0].sql, /SET card_id = ?, source_url = ?, source_title/);
+  assert.ok(dbCalls[0].sql.startsWith("UPDATE extraction_drafts SET card_id = ?, source_url = ?, source_title"));
   assert.deepEqual(dbCalls[0].args.slice(-1), ["pending-newest"]);
   assert.match(dbCalls[1].sql, /SET status = 'superseded'/);
   assert.deepEqual(dbCalls[1].args, ["pending-older"]);
