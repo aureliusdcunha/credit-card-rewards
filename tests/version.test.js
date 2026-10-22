@@ -36,6 +36,7 @@ test("health endpoint reports Gemini as the extraction provider without revealin
   assert.equal(health.aiConfigured, true);
   assert.equal(health.aiProvider, "gemini");
   assert.equal(health.aiModel, "gemini-3.5-flash");
-  assert.equal(health.pdfConversionConfigured, false);
+  assert.equal(health.pdfConversionConfigured, true);
+  assert.equal(health.pdfConversionProvider, "gemini");
   assert.equal(JSON.stringify(health).includes("do-not-expose-this-key"), false);
 });
