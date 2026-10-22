@@ -2,7 +2,7 @@ export const OFFICIAL_DOMAINS = [
   "axisbank.com", "axis.bank.in", "hdfcbank.com", "hdfc.bank.in", "icicibank.com", "sbicard.com", "sbi.co.in",
   "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
   "hsbc.co.in", "icici.bank.in", "americanexpress.com", "amex.co.in", "bobfinancial.com",
-  "federalbank.co.in", "aubank.in", "au.bank.in", "standardchartered.co.in"
+  "federalbank.co.in", "aubank.in", "au.bank.in", "standardchartered.co.in", "sc.bank.in"
 ];
 
 const ISSUER_DOMAIN_MAP = [
@@ -20,7 +20,7 @@ const ISSUER_DOMAIN_MAP = [
   { terms: ["bank of baroda", "bob financial", "bobcard"], domain: "bobfinancial.com" },
   { terms: ["federal bank", "federal"], domain: "federalbank.co.in" },
   { terms: ["au small finance", "au bank", "aubank"], domain: "aubank.in" },
-  { terms: ["standard chartered", "stanchart"], domain: "standardchartered.co.in" }
+  { terms: ["standard chartered", "stanchart", "standardchartered"], domain: "sc.bank.in" }
 ];
 
 export function hostIsAllowed(hostname) {
@@ -146,6 +146,219 @@ export function parseBingRssResults(xml, expectedDomain = null) {
   return results.sort((a, b) => b.score - a.score).slice(0, 12);
 }
 
+
+
+function cardNameTokens(cardName) {
+  const ignored = new Set(["the", "and", "of", "for", "in", "india", "bank", "credit", "card", "cards"]);
+  return [...new Set(String(cardName || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter(token => token.length > 1 && !ignored.has(token)))];
+}
+
+function isExpectedIssuerHost(hostname, expectedDomain) {
+  const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
+  const expected = String(expectedDomain || "").toLowerCase().replace(/\.$/, "");
+  return Boolean(expected && (host === expected || host.endsWith("." + expected)));
+}
+
+function issuerCandidateScore(title, rawUrl, cardName) {
+  let url;
+  try { url = new URL(rawUrl); } catch { return 0; }
+  if (/\/(?:sitemap|robots\.txt|search)(?:\/|\.|$)/i.test(url.pathname)) return 0;
+  const tokens = cardNameTokens(cardName);
+  if (!tokens.length) return 0;
+  const titleText = stripMarkup(title || "").toLowerCase();
+  const pathText = decodeURIComponent(url.pathname).replace(/[-_/]+/g, " ").toLowerCase();
+  const searchable = titleText + " " + pathText;
+  const matched = tokens.filter(token => searchable.includes(token));
+  if (!matched.length) return 0;
+  let score = matched.length * 32;
+  if (matched.length === tokens.length) score += 30;
+  if (/\bcredit.?cards?\b|\bcards?\b/i.test(searchable)) score += 16;
+  if (/\breward|points?|terms?|conditions?|fees?|charges?|mitc|benefits?\b/i.test(searchable)) score += 8;
+  if (/\.pdf$/i.test(url.pathname)) score += 4;
+  return score;
+}
+
+function makeIssuerCandidate(rawUrl, title, baseUrl, expectedDomain, cardName) {
+  let parsed;
+  try {
+    parsed = new URL(decodeHtml(rawUrl).trim(), baseUrl);
+    validateOfficialUrl(parsed.toString());
+  } catch { return null; }
+  if (!isExpectedIssuerHost(parsed.hostname, expectedDomain)) return null;
+  parsed.hash = "";
+  const url = parsed.toString();
+  const cleanedTitle = stripMarkup(title || "").slice(0, 240) || parsed.hostname;
+  const score = issuerCandidateScore(cleanedTitle, url, cardName);
+  if (score <= 0) return null;
+  return { url, title: cleanedTitle, domain: parsed.hostname.toLowerCase(), score };
+}
+
+export function parseIssuerSitePage(html, baseUrl, expectedDomain, cardName) {
+  const results = [];
+  const seen = new Set();
+  const anchorRegex = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  for (const match of String(html || "").matchAll(anchorRegex)) {
+    const attrs = match[1] || "";
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])(.*?)\1/i);
+    if (!hrefMatch) continue;
+    const titleMatch = attrs.match(/\btitle\s*=\s*(["'])(.*?)\1/i);
+    const title = stripMarkup(titleMatch?.[2] || match[2]);
+    const candidate = makeIssuerCandidate(hrefMatch[2], title, baseUrl, expectedDomain, cardName);
+    if (!candidate || seen.has(candidate.url)) continue;
+    seen.add(candidate.url);
+    results.push(candidate);
+  }
+  return results.sort((a, b) => b.score - a.score).slice(0, 30);
+}
+
+export function parseIssuerSitemapResults(xml, baseUrl, expectedDomain, cardName) {
+  const results = [];
+  const seen = new Set();
+  for (const match of String(xml || "").matchAll(/<loc\b[^>]*>([\s\S]*?)<\/loc>/gi)) {
+    const candidate = makeIssuerCandidate(match[1], "", baseUrl, expectedDomain, cardName);
+    if (!candidate || seen.has(candidate.url)) continue;
+    seen.add(candidate.url);
+    results.push(candidate);
+  }
+  return results.sort((a, b) => b.score - a.score).slice(0, 30);
+}
+
+function issuerSitemapUrls(content, baseUrl, expectedDomain) {
+  const found = new Set();
+  const candidates = [
+    ...String(content || "").matchAll(/^\s*sitemap\s*:\s*(\S+)/gim),
+    ...String(content || "").matchAll(/<loc\b[^>]*>([\s\S]*?)<\/loc>/gi)
+  ];
+  for (const match of candidates) {
+    let parsed;
+    try {
+      parsed = new URL(decodeHtml(match[1]).trim(), baseUrl);
+      validateOfficialUrl(parsed.toString());
+    } catch { continue; }
+    if (!isExpectedIssuerHost(parsed.hostname, expectedDomain)) continue;
+    if (!/sitemap/i.test(parsed.pathname) || found.has(parsed.toString())) continue;
+    parsed.hash = "";
+    found.add(parsed.toString());
+  }
+  return [...found].slice(0, 5);
+}
+
+function discoveryTimeoutOptions(milliseconds = 4500) {
+  try {
+    return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+      ? { signal: AbortSignal.timeout(milliseconds) }
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+async function fetchIssuerDiscoveryPage(rawUrl) {
+  try {
+    const response = await fetch(rawUrl, {
+      headers: {
+        "accept": "text/html,application/xhtml+xml,application/xml,text/xml,text/plain;q=0.9,*/*;q=0.8",
+        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.3.0)"
+      },
+      redirect: "follow",
+      ...discoveryTimeoutOptions()
+    });
+    if (!response.ok) return null;
+    const body = (await response.text()).slice(0, 1500000);
+    return { url: response.url || rawUrl, body };
+  } catch {
+    return null;
+  }
+}
+
+function issuerCardHubUrls(html, baseUrl, expectedDomain) {
+  const urls = [];
+  const seen = new Set();
+  const anchorRegex = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  for (const match of String(html || "").matchAll(anchorRegex)) {
+    const attrs = match[1] || "";
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])(.*?)\1/i);
+    if (!hrefMatch) continue;
+    const label = stripMarkup(match[2] + " " + (attrs.match(/\btitle\s*=\s*(["'])(.*?)\1/i)?.[2] || ""));
+    let parsed;
+    try { parsed = new URL(decodeHtml(hrefMatch[2]), baseUrl); } catch { continue; }
+    if (!isExpectedIssuerHost(parsed.hostname, expectedDomain)) continue;
+    if (!/(credit.?cards?|card.?products?)/i.test(label + " " + parsed.pathname)) continue;
+    parsed.hash = "";
+    if (seen.has(parsed.toString())) continue;
+    seen.add(parsed.toString());
+    urls.push(parsed.toString());
+  }
+  return urls.slice(0, 3);
+}
+
+async function discoverIssuerSiteUrls(domain, cardName) {
+  const origin = "https://" + domain;
+  const seedUrls = [
+    origin + "/robots.txt",
+    origin + "/sitemap.xml",
+    origin + "/sitemap/"
+  ];
+  const fetched = await Promise.all(seedUrls.map(fetchIssuerDiscoveryPage));
+  const combined = new Map();
+  const seenFetched = new Set(seedUrls);
+  const nestedSitemaps = new Set();
+
+  const merge = results => {
+    for (const result of results) {
+      const previous = combined.get(result.url);
+      if (!previous || result.score > previous.score) combined.set(result.url, result);
+    }
+  };
+
+  for (let index = 0; index < fetched.length; index++) {
+    const item = fetched[index];
+    if (!item) continue;
+    if (index === 0) {
+      for (const url of issuerSitemapUrls(item.body, item.url, domain)) nestedSitemaps.add(url);
+      continue;
+    }
+    merge(parseIssuerSitemapResults(item.body, item.url, domain, cardName));
+    merge(parseIssuerSitePage(item.body, item.url, domain, cardName));
+    for (const url of issuerSitemapUrls(item.body, item.url, domain)) nestedSitemaps.add(url);
+  }
+
+  if (combined.size < 3 && nestedSitemaps.size) {
+    const followups = [...nestedSitemaps].filter(url => !seenFetched.has(url)).slice(0, 3);
+    for (const url of followups) seenFetched.add(url);
+    const followupBodies = await Promise.all(followups.map(fetchIssuerDiscoveryPage));
+    for (const item of followupBodies) {
+      if (!item) continue;
+      merge(parseIssuerSitemapResults(item.body, item.url, domain, cardName));
+      merge(parseIssuerSitePage(item.body, item.url, domain, cardName));
+      for (const url of issuerSitemapUrls(item.body, item.url, domain)) {
+        if (!seenFetched.has(url)) nestedSitemaps.add(url);
+      }
+    }
+  }
+
+  // If no exact card page was present in the issuer's sitemap, inspect its own
+  // homepage and up to three card-catalogue links. Never leave the issuer domain.
+  if (!combined.size) {
+    const homepage = await fetchIssuerDiscoveryPage(origin + "/");
+    if (homepage) {
+      merge(parseIssuerSitePage(homepage.body, homepage.url, domain, cardName));
+      const hubs = issuerCardHubUrls(homepage.body, homepage.url, domain);
+      const hubPages = await Promise.all(hubs.map(fetchIssuerDiscoveryPage));
+      for (const item of hubPages) {
+        if (item) merge(parseIssuerSitePage(item.body, item.url, domain, cardName));
+      }
+    }
+  }
+
+  return [...combined.values()].sort((a, b) => b.score - a.score).slice(0, 12);
+}
+
 function knownOfficialFallbacks(issuer, cardName) {
   const issuerText = String(issuer || "").toLowerCase();
   const cardText = String(cardName || "").toLowerCase();
@@ -242,7 +455,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   if (issuerValue.length < 2) throw new Error("Enter the bank or card issuer.");
   if (cardValue.length < 2) throw new Error("Enter the exact credit-card name or variant.");
   const domain = issuerDomainFor(issuerValue);
-  if (!domain) throw new Error("Automatic search is not configured for this issuer yet. Use the official-URL fallback below.");
+  if (!domain) throw new Error("Automatic URL discovery is not configured for this issuer yet. Check the issuer name and try again; a URL can still be supplied as an optional fallback.");
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   const queries = [
     "site:" + domain + " \"" + safeCard + "\" credit card rewards points terms conditions",
@@ -250,73 +463,79 @@ export async function discoverOfficialUrls(issuer, cardName) {
     "site:" + domain + " \"" + safeCard + "\" credit card MITC benefits reward programme"
   ];
   const combined = new Map();
-  for (const query of queries) {
-    let response;
+  const mergeResults = results => {
+    for (const result of results) {
+      const cardScore = issuerCandidateScore(result.title, result.url, cardValue);
+      const ranked = { ...result, score: Math.max(Number(result.score || 0), cardScore) };
+      const existing = combined.get(ranked.url);
+      if (!existing || ranked.score > existing.score) combined.set(ranked.url, ranked);
+    }
+  };
+  const readSearchResults = async (url, headers, parser) => {
     try {
-      response = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
-        headers: { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.1" }
+      const response = await fetch(url, {
+        headers,
+        ...discoveryTimeoutOptions(6500)
       });
-    } catch { continue; }
-    if (!response.ok) continue;
-    const html = (await response.text()).slice(0, 1200000);
-    for (const result of parseDuckDuckGoResults(html, domain)) {
+      if (!response.ok) return [];
+      const body = (await response.text()).slice(0, 1200000);
+      return parser(body, domain);
+    } catch {
+      return [];
+    }
+  };
+
+  // All primary queries run concurrently so a slow provider does not serialise
+  // three otherwise independent issuer-specific searches.
+  const primaryResults = await Promise.all(queries.map(query =>
+    readSearchResults(
+      "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.3.0" },
+      parseDuckDuckGoResults
+    )
+  ));
+  for (const results of primaryResults) mergeResults(results);
+
+  // Search pages can change format or be bot-protected. Probe both fallback
+  // formats concurrently; every returned URL still passes the issuer allow-list.
+  if (!combined.size) {
+    const fallbackRequests = [
+      ...queries.slice(0, 2).map(query => ({
+        url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query),
+        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.3.0)" },
+        parser: parseDuckDuckGoLiteResults
+      })),
+      ...queries.slice(0, 2).map(query => ({
+        url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
+        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.3.0)" },
+        parser: parseBingRssResults
+      }))
+    ];
+    const fallbackResults = await Promise.all(fallbackRequests.map(request =>
+      readSearchResults(request.url, request.headers, request.parser)
+    ));
+    for (const results of fallbackResults) mergeResults(results);
+  }
+
+  // If search results do not identify the requested card, inspect the issuer's
+  // own sitemap/catalogue. This is generic across cards—no URL per card required.
+  const hasCardMatch = [...combined.values()].some(result =>
+    issuerCandidateScore(result.title, result.url, cardValue) > 0
+  );
+  if (!hasCardMatch) {
+    for (const result of await discoverIssuerSiteUrls(domain, cardValue)) {
       const existing = combined.get(result.url);
       if (!existing || result.score > existing.score) combined.set(result.url, result);
     }
   }
-  // Search-result HTML can change or be simplified by bot protection. Try DuckDuckGo's
-  // lighter results page with a looser anchor parser before using another provider.
-  if (!combined.size) {
-    for (const query of queries.slice(0, 2)) {
-      let response;
-      try {
-        response = await fetch("https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query), {
-          headers: {
-            "accept": "text/html",
-            "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.1)"
-          }
-        });
-      } catch { continue; }
-      if (!response.ok) continue;
-      const html = (await response.text()).slice(0, 1200000);
-      for (const result of parseDuckDuckGoLiteResults(html, domain)) {
-        const existing = combined.get(result.url);
-        if (!existing || result.score > existing.score) combined.set(result.url, result);
-      }
-      if (combined.size) break;
-    }
-  }
 
-  // If DuckDuckGo variants yield no allow-listed links, try Bing's RSS output.
-  if (!combined.size) {
-    for (const query of queries.slice(0, 2)) {
-      let response;
-      try {
-        response = await fetch("https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query), {
-          headers: {
-            "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-            "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.1)"
-          }
-        });
-      } catch { continue; }
-      if (!response.ok) continue;
-      const xml = (await response.text()).slice(0, 1200000);
-      for (const result of parseBingRssResults(xml, domain)) {
-        const existing = combined.get(result.url);
-        if (!existing || result.score > existing.score) combined.set(result.url, result);
-      }
-      if (combined.size) break;
-    }
-  }
-
-  // Some high-traffic cards have a stable, known issuer landing page. Prefer it over
-  // search snippets so the first source is specific to the exact requested card.
-  for (const result of knownOfficialFallbacks(issuerValue, cardValue)) {
-    const existing = combined.get(result.url);
-    if (!existing || result.score > existing.score) combined.set(result.url, result);
-  }
+  // Retain known verified landing pages as a final fallback for particularly
+  // important cards, without requiring a new hardcoded entry for every card.
+  mergeResults(knownOfficialFallbacks(issuerValue, cardValue));
 
   const results = [...combined.values()].sort((a, b) => b.score - a.score).slice(0, 12);
-  if (!results.length) throw new Error("Automatic search providers returned no readable official issuer results. Retry later or paste a URL from the bank's official website.");
+  if (!results.length) {
+    throw new Error("No matching official issuer card page was found by search or the issuer sitemap/catalogue. Check the bank and card name and retry; pasting a URL is optional fallback.");
+  }
   return results;
 }
