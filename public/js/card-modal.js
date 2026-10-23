@@ -66,7 +66,11 @@
         ? '<blockquote>“' + escape(rule.sourceQuote) + '”</blockquote>'
         : '<p class="terminal-muted">No source quote recorded.</p>';
       return '<tr>' +
-        '<td class="terminal-category">' + escape(C.prettyCategory(rule.category)) + '</td>' +
+        '<td class="terminal-category">' + escape(rule.label || C.prettyCategory(rule.category)) +
+          (rule.merchantCondition ? '<small class="terminal-muted terminal-cell-note">Merchant: ' + escape(rule.merchantCondition) + '</small>' : '') +
+          (rule.channelCondition ? '<small class="terminal-muted terminal-cell-note">Channel: ' + escape(rule.channelCondition) + '</small>' : '') +
+          (rule.calculatorEligible === false ? '<small class="terminal-muted terminal-cell-note">Reference rule · not applied by calculator</small>' : '') +
+        '</td>' +
         '<td><span class="terminal-rate">' + escape(formula) + '</span>' +
           (rule.rounding ? '<small class="terminal-muted terminal-cell-note">Rounding: ' + escape(rule.rounding) + '</small>' : '') +
         '</td>' +
