@@ -17,7 +17,7 @@ test("all app pages reference a valid installable Android PWA manifest and icons
   ];
   for (const path of pages) {
     const html = await read(path);
-    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest\?v=0\.6\.15\.0">/);
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest\?v=0\.6\.21\.0">/);
     assert.match(html, /<link rel="icon" type="image\/png" sizes="192x192" href="\/icons\/icon-192\.png/);
     assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/icon-192\.png/);
     assert.match(html, /name="apple-mobile-web-app-capable" content="yes"/);
@@ -87,7 +87,7 @@ test("the service worker precaches the app shell and never intercepts or caches 
     '"/icons/icon-192.png"', '"/icons/icon-512.png"'
   ]) assert.ok(worker.includes(path), "precache list should include " + path);
 
-  assert.match(worker, /const CACHE_VERSION = "0\.6\.15"/);
+  assert.match(worker, /const CACHE_VERSION = "0\.6\.21"/);
   assert.match(worker, /url\.pathname === "\/api" \|\| url\.pathname\.startsWith\("\/api\/"\)/);
   const bypass = worker.indexOf('if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return;');
   const fetchCache = worker.indexOf("event.respondWith", bypass);

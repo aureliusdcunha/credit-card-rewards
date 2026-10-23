@@ -327,7 +327,7 @@ async function fetchIssuerDiscoveryPage(rawUrl) {
     const response = await fetch(rawUrl, {
       headers: {
         "accept": "text/html,application/xhtml+xml,application/xml,text/xml,text/plain;q=0.9,*/*;q=0.8",
-        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.15)"
+        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.21)"
       },
       redirect: "follow",
       ...discoveryTimeoutOptions()
@@ -429,7 +429,7 @@ function knownOfficialFallbacks(issuer, cardName) {
   // GoldX is a distinct Uni product, not the legacy YES BANK UNI Credit Card.
   // Do not return the legacy MITC/KFS/catalogue, which can introduce unrelated
   // Zagg or other card fees into a GoldX review.
-  const isUniGoldX = /\buni\b/.test(cardText) && /gold\s*x|goldx/.test(cardText);
+  const isUniGoldX = /gold\s*x|goldx/.test(cardText) && (/\buni\b/.test(cardText) || issuerText.includes("yes bank") || issuerText.includes("bob"));
   if (isUniGoldX && (issuerText.includes("yes bank") || issuerText.includes("bob") || issuerText.includes("uni"))) {
     return [
       {
@@ -627,7 +627,7 @@ export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
   // Allow only this exact document for the YES BANK UNI Credit Card variant.
   const issuerText = String(issuer || "").toLowerCase();
   const cardText = String(cardName || "").toLowerCase();
-  const isUniGoldX = /\buni\b/i.test(cardText) && /gold\s*x|goldx/i.test(cardText);
+  const isUniGoldX = /gold\s*x|goldx/i.test(cardText) && (/\buni\b/i.test(cardText) || issuerText.includes("yes bank") || issuerText.includes("bob"));
   const isYesBankUni = issuerText.includes("yes bank") &&
     /\buni\b/i.test(cardText) &&
     !/\brupay\b/i.test(cardText) &&
@@ -675,7 +675,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   // GoldX is a distinct Uni product and may be issued under a co-brand issuer
   // name; route it to Uni's exact official GoldX pages before generic issuer search.
-  if (/\buni\b/i.test(cardValue) && /gold\s*x|goldx/i.test(cardValue)) {
+  if (/gold\s*x|goldx/i.test(cardValue) && (/\buni\b/i.test(cardValue) || /yes\s*bank|bob/i.test(issuerValue))) {
     const curated = knownOfficialFallbacks(issuerValue, cardValue);
     if (curated.length) return curated;
   }
@@ -751,7 +751,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const primaryResults = await Promise.all(queries.map(item =>
     readSearchResults(
       "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(item.query),
-      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.15" },
+      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.21" },
       parseDuckDuckGoResults,
       item.expectedDomain
     )
@@ -768,14 +768,14 @@ export async function discoverOfficialUrls(issuer, cardName) {
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(item.query),
-        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.15)" },
+        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.21)" },
         parser: parseDuckDuckGoLiteResults
       })),
       ...fallbackQueries.map(item => ({
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(item.query),
-        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.15)" },
+        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.21)" },
         parser: parseBingRssResults
       }))
     ];
