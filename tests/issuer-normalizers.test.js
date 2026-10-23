@@ -13,6 +13,7 @@ function combinedSources() {
     "SOURCE TEXT START",
     "UPDATES ON YOUR REGALIA GOLD REWARDS, FEES & CHARGES (Effective 15th May, 2026). Earlier, Base reward points of 4 Reward Points were accrued on every ₹150 spends across eligible categories. Effective 15th May, 2026, your card will accrue base reward points of 5 Reward Points for every ₹200 spends across eligible categories. All other accelerated rewards program will continue.",
     "5X Reward Points on select merchants: 5X Reward Points is applicable on spends at select merchants – Myntra, Nykaa, Reliance Digital, Marks & Spencers. 5X Reward points on will be capped at 5000 RP per month across all brands combined. Base reward points accrued on these will continue as is with no capping.",
+    "5X Reward Points can be accumulated for e-com and POS transactions. Minimum transaction value to be eligible for the offer or reward points is Rs. 150.",
     "SOURCE TEXT END",
     "",
     "OFFICIAL SOURCE 2",
