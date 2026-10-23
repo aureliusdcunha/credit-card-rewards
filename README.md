@@ -2,6 +2,13 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.14 — 23 October 2026
+
+- Adds actual, dimension-checked **192×192 and 512×512 PNG** app icons in the web manifest, including a maskable 512px PNG for PWABuilder / Android packaging. The 512px PNG is required alongside the 192px icon for robust Chromium/PWABuilder validation; SVG is no longer the sole 512px icon.
+- Updates the service-worker precache to use the 512px PNG and bumps its cache version so previously installed clients fetch the new manifest/icon list.
+- Adds regression checks that verify both PNG file signatures and their real width/height, plus the manifest PNG icon entries.
+- Aligns package / Worker metadata, navigation pill, all HTML footers, asset cache-busters and source-discovery user-agent to **0.6.14 / build 20261023.12**.
+
 ## Release 0.6.13 — 23 October 2026
 
 - Adds an installable Android PWA manifest with app identity, standalone display, theme/splash colours, 192px PNG and scalable 512px SVG icons, app shortcuts and home-screen metadata.
