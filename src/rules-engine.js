@@ -248,7 +248,7 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   } else if (fallbackKind === "domestic") {
     notes.push("No exact-category or general rule was found; a verified domestic-spend rate was used as a fallback. This assumes the transaction is domestic; this page does not separately ask for transaction geography.");
   } else if (fallbackKind === "general" && category !== "general") {
-    notes.push("No exact-category rule was found; the card's verified general eligible-spend rate was used.");
+    notes.push("No exact-category rule was found; the configured general/base earning rate was used; verify the provisional rate before relying on it.");
   }
   if (ruleIsDemo || anyDemoExclusions || card.reviewStatus !== "verified") {
     notes.push("Provisional estimate: one or more rules for this card have not been fully verified. Check the linked official terms before making a payment decision.");
