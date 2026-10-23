@@ -72,6 +72,25 @@ function addBenefitFromRule(data, rule, sourceText, fallbackUrl, description) {
 }
 
 
+function findMccExclusionFacts(sections) {
+  const facts = [];
+  const seen = new Set();
+  for (const section of sections) {
+    const clauses = officialClauses([section]);
+    for (const clause of clauses) {
+      if (!/\bMCC(?:s|\s+codes?)?\b|merchant category codes?/i.test(clause.quote)) continue;
+      if (!/\b(?:exclud(?:e|ed|es|ing|sion)|not eligible|ineligible|will not earn|do not earn|no reward|not earn reward)\b/i.test(clause.quote)) continue;
+      const codes = [...new Set(clause.quote.match(/\b\d{4}\b/g) || [])];
+      if (!codes.length) continue;
+      const key = clause.url + "|" + clause.quote.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      facts.push({ url: clause.url || null, title: clause.title, quote: clause.quote, codes });
+    }
+  }
+  return facts;
+}
+
 function findOfficialFact(sourceText, regex) {
   for (const section of officialSourceSections(sourceText, "")) {
     const match = regex.exec(section.text);
@@ -407,6 +426,22 @@ export function normalizeCommonCardFacts(data, context = {}) {
     ? { ...combinedMembershipFact, label: "Annual/renewal fee" }
     : parsedAnnualFact;
   const waiverFact = findWaiverFact(clauses);
+
+  // Preserve MCC-specific exclusions as source-backed review data. These codes
+  // are not interchangeable with broad spend categories and should not be guessed.
+  const mccFacts = findMccExclusionFacts(sections);
+  if (mccFacts.length) {
+    genericUpsertBenefit(data, {
+      name: "MCC-based reward exclusions",
+      description: "Official-source MCC exclusion clauses found: " + [...new Set(mccFacts.flatMap(fact => fact.codes))].sort().join(", ") + ". Check the quoted terms for the transaction types and scope that each code excludes.",
+      conditions: mccFacts.map(fact => fact.quote).join(" "),
+      sourceQuote: mccFacts.map(fact => fact.quote).join(" "),
+      sourceUrl: mccFacts[0].url || null
+    });
+    if (new Set(mccFacts.flatMap(fact => fact.codes)).size >= 2) {
+      data.missingItems = data.missingItems.filter(item => !/detailed list of mcc code exclusions/i.test(String(item)));
+    }
+  }
 
   if (joiningFact) data.joiningFee = joiningFact.amount;
   if (annualFact) data.annualFee = annualFact.amount;
