@@ -1261,7 +1261,7 @@ textarea::selection,
 }
 
 
-/* 0.6.18 — Responsive mobile card catalogue */
+/* 0.6.20 — Responsive mobile card catalogue */
 @media (max-width: 720px) {
   .card-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .credit-card-tile { width: 100%; min-width: 0; padding: 16px; }
