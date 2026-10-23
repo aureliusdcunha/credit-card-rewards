@@ -793,6 +793,35 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
           const hasNamedCondition = Boolean(merchantCondition) ||
             /\b(?:merchants?|brands?|dining|grocery|groceries|departmental stores?|movies|travel|flights?|hotels?|fuel|insurance|utility|utilities|bill pay|rent|wallet|school fees|online|offline|e-?com|pos|smartbuy|transactions?)\b/i.test(sentence);
           if (!hasNamedCondition) continue;
+
+          // Issuer-specific or AI-extracted numeric category rules may already
+          // cover every transaction category named by a multiplier clause. Do not
+          // create a duplicate group rule on top of those independently sourced rates.
+          if (!merchantCondition) {
+            const categoryHints = [
+              ["dining", /\b(?:dining|restaurants?|food delivery)\b/i],
+              ["movies", /\bmovies?\b/i],
+              ["departmental_stores", /\bdepartmental stores?\b/i],
+              ["groceries", /\b(?:grocery|groceries)\b/i],
+              ["airline_direct", /\b(?:flights?|airlines?)\b/i],
+              ["hotel_direct", /\bhotels?\b/i],
+              ["travel_portal", /\b(?:smartbuy|travel portal|booking portal)\b/i],
+              ["fuel", /\bfuel\b/i],
+              ["insurance", /\binsurance\b/i],
+              ["utilities", /\b(?:utilities|utility|bill pay)\b/i],
+              ["education", /\b(?:education|school fees)\b/i]
+            ];
+            const mentionedCategories = categoryHints.filter(([, pattern]) => pattern.test(sentence)).map(([category]) => category);
+            const allCategoriesAlreadyHaveRates = mentionedCategories.length > 0 &&
+              mentionedCategories.every(category => data.rules.some(rule =>
+                rule.category === category &&
+                Number(rule.perAmount) > 0 &&
+                Number(rule.rate) >= 0 &&
+                rule.sourceQuote
+              ));
+            if (allCategoriesAlreadyHaveRates) continue;
+          }
+
           if (!baseRule) {
             sawUnquantifiedAccelerator = true;
             continue;
