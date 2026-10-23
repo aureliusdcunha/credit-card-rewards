@@ -880,7 +880,7 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
           }
           if (existingAccelerated) malformedExistingRules.add(existingAccelerated);
 
-          const sectionHasPointCap = /(?:capped|cap|maximum|limit)[^.]{0,90}\b(?:reward\s*)?points?\b/i.test(section.text);
+          const sectionHasPointCap = /(?:capped|cap|maximum|limit)[^.]{0,90}\b(?:reward\s*)?(?:points?|rp)\b/i.test(section.text);
           const pointCapMatch = section.text.match(/(?:capped\s+at|cap(?:ped)?\s+(?:of|at)|maximum\s+(?:cap\s+)?of)\s*(?:₹|rs\.?\s*)?([\d,]+)\s*(?:rp|reward\s+points?|points?)\s*(?:per|\/|a)\s*(?:calendar\s+)?month/i) ||
             section.text.match(/([\d,]+)\s*(?:rp|reward\s+points?)\s*(?:per|\/|a)\s*(?:calendar\s+)?month[^.\n]{0,80}\b(?:cap|capped|maximum)\b/i);
           const minimumMatch = section.text.match(/(?:minimum\s+transaction(?:\s+value)?|minimum\s+purchase)[^\.\n]{0,100}?(?:₹|rs\.?\s*|inr\s*)?([\d,]+(?:\.\d+)?)/i);
