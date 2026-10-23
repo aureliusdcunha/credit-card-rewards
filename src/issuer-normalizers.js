@@ -84,6 +84,7 @@ function addSourceBackedBaseRules(data, sections) {
   const addRule = (category, rate, perAmount, quote, section) => {
     if (hasUsableRule(category)) return;
     if (!Number.isFinite(rate) || rate < 0 || !Number.isFinite(perAmount) || perAmount <= 0) return;
+    if (category === "general") foundGeneralRate = true;
     data.rules.push({
       category,
       label: category === "general" ? "Base retail reward rate" : "Source-stated " + category.replace(/_/g, " ") + " reward rate",
@@ -101,6 +102,7 @@ function addSourceBackedBaseRules(data, sections) {
     });
   };
 
+  let foundGeneralRate = false;
   for (const section of sections) {
     const text = String(section.text || "");
     const flat = text.replace(/\s+/g, " ").trim();
@@ -138,6 +140,11 @@ function addSourceBackedBaseRules(data, sections) {
         addRule("insurance", rate, perAmount, quote, section);
       }
     }
+  }
+  if (foundGeneralRate) {
+    data.missingItems = (Array.isArray(data.missingItems) ? data.missingItems : []).filter(item =>
+      !/base reward point earning rate|base reward rate|general spend.*reward rate/i.test(String(item))
+    );
   }
 }
 
