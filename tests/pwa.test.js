@@ -16,7 +16,7 @@ test("all app pages reference a valid installable Android PWA manifest and icons
   ];
   for (const path of pages) {
     const html = await read(path);
-    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest\?v=0\.6\.13\.0">/);
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest\?v=0\.6\.14\.0">/);
     assert.match(html, /<link rel="icon" type="image\/png" sizes="192x192" href="\/icons\/icon-192\.png/);
     assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/icon-192\.png/);
     assert.match(html, /name="apple-mobile-web-app-capable" content="yes"/);
