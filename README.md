@@ -2,6 +2,14 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.12 — 23 October 2026
+
+- Adds a deterministic official source bundle for **YES BANK UNI Credit Card**, whose product and catalogue pages are JavaScript-rendered for the importer.
+- Reads the current YES BANK Credit Card MITC hosted on the official Uni document CDN (updated 23 June 2026) and the issuer's retail-card Key Fact Statement instead of relying on search-result ordering.
+- Adds a narrowly scoped HTTPS allow-list exception for the exact UNI MITC PDF only; other URLs on the Uni CDN are not accepted as YES BANK sources.
+- Adds regression coverage for discovering the known UNI source set, issuer-specific URL validation and extraction from a JavaScript-only product page.
+- Updates package/Worker metadata, navigation version pill, all page footers, asset cache keys, source-discovery user-agent and docs to **0.6.12 / build 20261023.10**.
+
 ## Release 0.6.11 — 23 October 2026
 
 - Preserves high-value facts from long issuer pages before shortening source excerpts. Fee schedules, joining/renewal fees, spend-based waivers, reward rates, multiplier offers, caps, exclusions and eligibility clauses appearing deep in page content are now prioritized for all card issuers.
