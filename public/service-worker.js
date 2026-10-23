@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "rewards-intelligence-shell-";
-const CACHE_VERSION = "0.6.17";
+const CACHE_VERSION = "0.6.18";
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const PRECACHE_URLS = [
   "/",
@@ -12,16 +12,16 @@ const PRECACHE_URLS = [
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
-  "/css/app.css?v=0.6.17.0",
-  "/js/api.js?v=0.6.17.0",
-  "/js/layout.js?v=0.6.17.0",
-  "/js/dashboard.js?v=0.6.17.0",
-  "/js/source-review-prefill.js?v=0.6.17.0",
-  "/js/card-modal.js?v=0.6.17.0",
-  "/js/cards.js?v=0.6.17.0",
-  "/js/calculator.js?v=0.6.17.0",
-  "/js/compare.js?v=0.6.17.0",
-  "/js/sources.js?v=0.6.17.0"
+  "/css/app.css?v=0.6.18.0",
+  "/js/api.js?v=0.6.18.0",
+  "/js/layout.js?v=0.6.18.0",
+  "/js/dashboard.js?v=0.6.18.0",
+  "/js/source-review-prefill.js?v=0.6.18.0",
+  "/js/card-modal.js?v=0.6.18.0",
+  "/js/cards.js?v=0.6.18.0",
+  "/js/calculator.js?v=0.6.18.0",
+  "/js/compare.js?v=0.6.18.0",
+  "/js/sources.js?v=0.6.18.0"
 ];
 
 const STATIC_PATHS = new Set([
