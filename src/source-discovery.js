@@ -12,7 +12,7 @@ export const OFFICIAL_DOMAINS = [
   "hsbc.co.in", "icicibank.com", "americanexpress.com", "amex.co.in", "bobfinancial.com",
   "federalbank.co.in", "aubank.in", "standardchartered.co.in",
   // Official Uni CDN hosting the current co-branded YES BANK Credit Card MITC.
-  "webcdn.uni.cards"
+  "webcdn.uni.cards", "uni.cards"
 ];
 
 const ISSUER_DOMAIN_MAP = [
@@ -426,7 +426,33 @@ async function discoverIssuerSiteUrls(domain, cardName) {
 function knownOfficialFallbacks(issuer, cardName) {
   const issuerText = String(issuer || "").toLowerCase();
   const cardText = String(cardName || "").toLowerCase();
-  if (issuerText.includes("yes bank") && /\buni\b/.test(cardText) && !/\brupay\b/.test(cardText)) {
+  // GoldX is a distinct Uni product, not the legacy YES BANK UNI Credit Card.
+  // Do not return the legacy MITC/KFS/catalogue, which can introduce unrelated
+  // Zagg or other card fees into a GoldX review.
+  const isUniGoldX = /\buni\b/.test(cardText) && /gold\s*x|goldx/.test(cardText);
+  if (isUniGoldX && (issuerText.includes("yes bank") || issuerText.includes("bob") || issuerText.includes("uni"))) {
+    return [
+      {
+        url: "https://www.uni.cards/",
+        title: "Uni GoldX Credit Card — official product and rewards page",
+        domain: "www.uni.cards",
+        score: 250
+      },
+      {
+        url: "https://www.uni.cards/campaign/?type=creative_2",
+        title: "Uni GoldX Credit Card — official rewards, travel and fee campaign page",
+        domain: "www.uni.cards",
+        score: 245
+      },
+      {
+        url: "https://web.uni.cards/",
+        title: "Uni GoldX Credit Card — official product page",
+        domain: "web.uni.cards",
+        score: 240
+      }
+    ];
+  }
+  if (issuerText.includes("yes bank") && /\buni\b/.test(cardText) && !/\brupay\b/.test(cardText) && !isUniGoldX) {
     return [
       {
         url: "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card",
@@ -593,9 +619,16 @@ export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
 
   // The co-branded card's MITC is hosted on Uni's official document CDN.
   // Allow only this exact document for the YES BANK UNI Credit Card variant.
-  const isYesBankUni = String(issuer || "").toLowerCase().includes("yes bank") &&
-    /\buni\b/i.test(String(cardName || "")) &&
-    !/\brupay\b/i.test(String(cardName || ""));
+  const issuerText = String(issuer || "").toLowerCase();
+  const cardText = String(cardName || "").toLowerCase();
+  const isUniGoldX = /\buni\b/i.test(cardText) && /gold\s*x|goldx/i.test(cardText);
+  const isYesBankUni = issuerText.includes("yes bank") &&
+    /\buni\b/i.test(cardText) &&
+    !/\brupay\b/i.test(cardText) &&
+    !isUniGoldX;
+  // Allow Uni's own official product pages for GoldX, but keep this exception
+  // tightly scoped to the exact GoldX variant.
+  if (isUniGoldX && (host === "uni.cards" || host.endsWith(".uni.cards"))) return url;
   if (isYesBankUni && host === "webcdn.uni.cards" &&
       url.pathname === "/nxwave/docs/CC_YesBank_MITC.pdf") {
     return url;
