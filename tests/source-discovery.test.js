@@ -414,3 +414,29 @@ test("manual MITC source review supplements the PDF with official card-page rewa
     globalThis.fetch = originalFetch;
   }
 });
+
+
+// GoldX is a distinct product and must not fall back to legacy YES BANK UNI terms.
+test("discovers exact Uni GoldX sources instead of the legacy UNI Credit Card catalogue and MITC", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error("GoldX curated fallback should not depend on search"); };
+  try {
+    const results = await discoverOfficialUrls("YES Bank", "UNI Gold X");
+    assert.equal(results[0].url, "https://www.uni.cards/");
+    assert.ok(results.some(item => item.url === "https://www.uni.cards/campaign/?type=creative_2"));
+    assert.ok(!results.some(item => item.url.includes("CC_YesBank_MITC.pdf")));
+    assert.ok(!results.some(item => item.url.includes("yesbank_key_fact_statement.pdf")));
+    assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("allows Uni official domains only for the exact GoldX variant", () => {
+  assert.equal(validateIssuerOfficialUrl("https://www.uni.cards/", "YES Bank", "UNI GoldX").hostname, "www.uni.cards");
+  assert.throws(
+    () => validateIssuerOfficialUrl("https://www.uni.cards/", "YES Bank", "UNI Credit Card"),
+    /domain does not match YES Bank/
+  );
+});
