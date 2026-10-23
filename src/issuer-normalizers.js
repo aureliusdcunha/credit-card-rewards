@@ -916,6 +916,20 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
             .split(/[^a-z0-9]+/)
             .filter(token => token.length > 2 && !["selected", "select", "eligible", "merchants", "brands", "spends", "spend", "reward", "rewards", "points", "point", "transactions", "transaction", "online", "offline", "through", "via"].includes(token));
           const newMerchantTokens = new Set(merchantKey(merchantCondition));
+          const channelOnlyFollowup = !merchantCondition &&
+            Boolean(channelCondition) &&
+            /\b(?:can be accumulated|eligible|applicable|valid)\s+(?:for|on|in|through)\s+[^.\n]*(?:e-?com|pos|point.of.sale|online|offline|smartbuy|portal|app)/i.test(sentence) &&
+            !/\b(?:select(?:ed)?\s+merchants?|eligible\s+merchants?|brands?|dining|grocery|groceries|departmental stores?|movies|travel|flights?|hotels?|fuel|insurance|utility|utilities|bill pay|rent|wallet|school fees)\b/i.test(sentence);
+          if (channelOnlyFollowup) {
+            const merchantOffer = generated.find(rule =>
+              Number(rule.multiplier) === multiplier && rule.merchantCondition
+            );
+            if (merchantOffer) {
+              merchantOffer.channelCondition = merchantOffer.channelCondition || channelCondition;
+              merchantOffer.notes = [merchantOffer.notes, "The same source also specifies channel eligibility: " + channelCondition + "."].filter(Boolean).join(" ");
+              continue;
+            }
+          }
           const equivalentGenerated = generated.find(rule => {
             if (Number(rule.multiplier) !== multiplier) return false;
             const priorTokens = merchantKey(rule.merchantCondition);
