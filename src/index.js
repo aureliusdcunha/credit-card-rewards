@@ -3,6 +3,7 @@ import { calculateRewards } from "./rules-engine.js";
 import { discoverOfficialUrls, validateOfficialUrl, validateIssuerOfficialUrl } from "./source-discovery.js";
 import { extractOfficialHtml } from "./html-source.js";
 import { normalizeDraftRewardUnits } from "./reward-units.js";
+import { prioritizeOfficialSourceText } from "./source-excerpt.js";
 import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts, normalizeSbiSimplySaveExtraction, normalizeGenericAcceleratedEarningRules } from "./issuer-normalizers.js";
 import { CATEGORIES, normalizeDraftCategories, sanitizeIncompleteEarningRules } from "./category-normalizer.js";
 import { deduplicatePendingDraftRows, draftIdentity, sameCardIdentity, normalizeIdentityPartForCompare, normalizeSourceUrl } from "./draft-dedupe.js";
@@ -577,7 +578,7 @@ async function autoExtractCardWithTrace(request, env, trace) {
       selectedSources.push({
         url: fetched.url,
         title: fetched.title || outcome.candidate.title || "Official issuer source",
-        text: fetched.text.slice(0, Math.floor(MAX_AUTO_SOURCE_CHARS / maxSources))
+        text: prioritizeOfficialSourceText(fetched.text, Math.floor((MAX_AUTO_SOURCE_CHARS - maxSources * 300) / maxSources))
       });
       if (selectedSources.length >= maxSources) break;
     }
