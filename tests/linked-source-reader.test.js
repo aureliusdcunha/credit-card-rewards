@@ -454,7 +454,7 @@ test("rejects generic card-type labels instead of mixing different card variants
     assert.equal(response.status, 400);
     const body = await response.json();
     assert.match(body.error, /card type, not a specific product name/i);
-    assert.match(body.nextStep, /exact card product\\/variant/i);
+    assert.match(body.nextStep, /exact card product\/variant/i);
     assert.equal(fetchCount, 0);
   } finally {
     globalThis.fetch = originalFetch;
