@@ -460,3 +460,88 @@ test("rejects generic card-type labels instead of mixing different card variants
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("extracts YES BANK UNI from the current official MITC when the product page is JavaScript-only", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  const productUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card";
+  const catalogueUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards";
+  const mitcUrl = "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf";
+  const keyFactUrl = "https://quickapply.yes.bank.in/savings/assets/files/yesbank_key_fact_statement.pdf";
+  const mitcText = "YES BANK Credit Card MITC. CMITC_V18_23062026. " +
+    "UNI joining fee is NIL and annual membership fee is INR 499, exclusive of GST. " +
+    "Minimum spend for waiver of joining fee is INR 5,000 within one month of card setup date. " +
+    "Minimum spend for waiver of annual fee is INR 50,000 within 12 months prior to card anniversary date. " +
+    "The UNI credit card earns 1% cash back in Uni Coins on all transactions. " +
+    "0% foreign currency conversion charges apply to international transactions. " +
+    "A 1% fuel surcharge waiver applies to eligible fuel transactions. ".repeat(3);
+  const kfsText = "YES BANK Key Fact Statement - Credit Cards. UNI Credit Card fee schedule and cardmember disclosure. " +
+    "The current co-brand terms and conditions must be read with this Key Fact Statement. ".repeat(3);
+  const validDraft = {
+    issuer: "YES Bank",
+    cardName: "UNI Credit Card",
+    network: null,
+    rewardCurrency: "Uni Coins",
+    annualFee: 499,
+    joiningFee: 0,
+    annualFeeWaiver: "Annual fee waived on eligible annual spends of INR 50,000; joining fee waiver requires INR 5,000 within one month.",
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [
+      { name: "1% cash back", description: "1% cash back in Uni Coins on all transactions.", conditions: null,
+        sourceQuote: "The UNI credit card earns 1% cash back in Uni Coins on all transactions.", sourceUrl: mitcUrl }
+    ],
+    missingItems: ["Confirm exact network variant from the physical card."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+    if (url.toString() === productUrl || url.toString() === catalogueUrl || url.toString() === catalogueUrl + "/") {
+      return new Response(
+        '<html><head><title>UNI Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><script src="/assets/uni-card.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === mitcUrl || url.toString() === keyFactUrl) {
+      return new Response(new Uint8Array([37, 80, 68, 70, 45, 49]), {
+        headers: { "content-type": "application/pdf" }
+      });
+    }
+    throw new Error("Unexpected outbound test URL: " + url.toString());
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "YES Bank", cardName: "UNI Credit Card" })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async toMarkdown() { return { format: "markdown", data: mitcText + "\n\n" + kfsText }; },
+        async run(_model, request) { return { response: JSON.stringify(validDraft) }; }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.selectedSource, mitcUrl);
+    assert.ok(body.discovery.sourcesRead.some(source => source.url === mitcUrl));
+    assert.ok(body.sourceExcerpt.includes("annual membership fee is INR 499"));
+    assert.ok(body.sourceExcerpt.includes("1% cash back in Uni Coins on all transactions"));
+    assert.ok(fetchedUrls.includes(productUrl));
+    assert.ok(fetchedUrls.includes(mitcUrl));
+    assert.ok(!fetchedUrls.some(url => /duckduckgo|bing\.com/.test(url)));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
