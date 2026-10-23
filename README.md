@@ -2,6 +2,15 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.10 — 23 October 2026
+
+- Shows extracted card details as a readable nested bullet list by default, with sections for card/programme details, earning rules, exclusions, benefits, eligibility and missing information.
+- Displays each earning rule as a main point with nested conditions, merchant/channel eligibility, minimum spend, caps, validity, notes and source evidence.
+- Keeps the underlying draft editable under **Advanced: view or edit raw JSON**; edits refresh the bullet summary and the same JSON remains the payload used for review/publishing.
+- Adds browser-side validation for generic card labels such as "charge card" before running discovery, alongside the existing Worker-side guard. The exact card variant is required so unrelated products aren't mixed into one card.
+- Adds regression tests for the default bullet view, advanced JSON path, version consistency and browser/server generic-card guards.
+- Updates package/Worker release metadata, navigation pill, all page footers, cache keys and source discovery user-agent to **0.6.10 / build 20261023.08**.
+
 ## Release 0.6.9 — 23 October 2026
 
 - Clarifies merchant-accelerator labels so a 5X total offer that includes the base rate is shown as **5X total offer (4X bonus component)**, not a 5X bonus. Explicitly additional X-times offers retain their source-supported bonus multiplier.
