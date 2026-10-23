@@ -380,11 +380,6 @@ async function aiExtract(request, env) {
         }
       }
     } catch (error) {
-            console.warn("Supplementary official PDF could not be read:", String(error?.message || error).slice(0, 180));
-          }
-        }
-      }
-    } catch (error) {
       // The primary source remains usable even if secondary discovery is temporarily down.
       console.warn("Supplementary official source discovery failed:", String(error?.message || error).slice(0, 180));
     }
