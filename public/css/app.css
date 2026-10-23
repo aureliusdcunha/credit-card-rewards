@@ -1190,3 +1190,72 @@ textarea::selection,
 .draft-json-details[open] > summary { margin-bottom: 10px; }
 .draft-json-details .field-label { margin-top: 9px; }
 .draft-json-details textarea { margin-top: 6px; font: 10px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+
+/* 0.6.13 · Android PWA navigation and install affordance */
+.bottom-taskbar { display:none; }
+.nav-menu-button { display:none !important; }
+.pwa-install-button { border:1px solid #397563; border-radius:9px; padding:8px 11px; background:#17382f; color:#8ef0d1; font:600 10px ui-monospace,SFMono-Regular,Menlo,monospace; cursor:pointer; white-space:nowrap; }
+.pwa-install-button[hidden] { display:none !important; }
+.pwa-install-button:focus-visible { outline:2px solid #70e0bc; outline-offset:2px; }
+@media (max-width:720px) {
+  /* Removing the backdrop filter avoids it becoming the fixed taskbar's containing block. */
+  #site-nav { backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+  .topbar { min-height:62px; padding:7px 12px; gap:8px; flex-wrap:nowrap; }
+  .topbar .brand { min-width:0; gap:8px; }
+  .topbar .brand-name { font-size:12px; }
+  .topbar .brand-sub { font-size:8px; letter-spacing:.8px; }
+  .topbar .brand-mark { flex:0 0 32px; width:32px; height:32px; border-radius:10px; }
+  .topbar .nav-links { display:none !important; }
+  .topbar .nav-menu-button { display:none !important; }
+  .topbar .nav-right { display:flex !important; margin-left:auto; gap:0; }
+  .topbar .env-badge,.topbar .app-version { display:none !important; }
+  .pwa-install-button { padding:8px 10px; font-size:9px; }
+  .bottom-taskbar {
+    display:grid !important;
+    position:fixed !important;
+    inset:auto 0 0 0 !important;
+    width:100% !important;
+    z-index:1000 !important;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:2px;
+    padding:7px 7px calc(7px + env(safe-area-inset-bottom,0px));
+    background:rgba(15,24,32,.98);
+    border-top:1px solid #2b404c;
+    box-shadow:0 -8px 24px rgba(0,0,0,.22);
+    -webkit-backdrop-filter:blur(18px);
+    backdrop-filter:blur(18px);
+  }
+  .bottom-taskbar .taskbar-link {
+    min-width:0;
+    display:flex !important;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    padding:5px 2px 4px;
+    min-height:47px;
+    border:1px solid transparent;
+    border-radius:10px;
+    color:#8ea5b3;
+    background:transparent;
+    font-size:9px;
+    font-weight:600;
+    line-height:1.15;
+    white-space:nowrap;
+    transition:background .15s ease,color .15s ease;
+  }
+  .bottom-taskbar .taskbar-link .nav-symbol { display:block; font-size:19px; line-height:1; color:#91a7b5; }
+  .bottom-taskbar .taskbar-link .nav-text { display:block !important; overflow:hidden; max-width:100%; text-overflow:ellipsis; font-size:9px; }
+  .bottom-taskbar .taskbar-link.active { color:#8ef0d1; background:#19372f; border-color:#285d4f; }
+  .bottom-taskbar .taskbar-link.active .nav-symbol { color:#70e0bc; }
+  .bottom-taskbar .taskbar-link:focus-visible { outline:2px solid #70e0bc; outline-offset:1px; }
+  body { padding-bottom:calc(78px + env(safe-area-inset-bottom,0px)) !important; }
+  .page-shell { padding-bottom:20px; }
+}
+@media (display-mode:standalone) {
+  #site-nav { padding-top:env(safe-area-inset-top,0px); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .bottom-taskbar .taskbar-link,.pwa-install-button { transition:none; }
+}

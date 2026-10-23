@@ -327,7 +327,7 @@ async function fetchIssuerDiscoveryPage(rawUrl) {
     const response = await fetch(rawUrl, {
       headers: {
         "accept": "text/html,application/xhtml+xml,application/xml,text/xml,text/plain;q=0.9,*/*;q=0.8",
-        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.12)"
+        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.13)"
       },
       redirect: "follow",
       ...discoveryTimeoutOptions()
@@ -701,7 +701,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const primaryResults = await Promise.all(queries.map(item =>
     readSearchResults(
       "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(item.query),
-      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.12" },
+      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.13" },
       parseDuckDuckGoResults,
       item.expectedDomain
     )
@@ -718,14 +718,14 @@ export async function discoverOfficialUrls(issuer, cardName) {
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(item.query),
-        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.12)" },
+        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.13)" },
         parser: parseDuckDuckGoLiteResults
       })),
       ...fallbackQueries.map(item => ({
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(item.query),
-        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.12)" },
+        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.13)" },
         parser: parseBingRssResults
       }))
     ];

@@ -2,6 +2,14 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.13 — 23 October 2026
+
+- Adds an installable Android PWA manifest with app identity, standalone display, theme/splash colours, 192px PNG and scalable 512px SVG icons, app shortcuts and home-screen metadata.
+- Adds a service worker that caches the app shell and static assets, provides an offline fallback page, updates versioned caches, and deliberately never caches `/api/*` responses or admin/source-review data.
+- Replaces the mobile hamburger menu with a fixed five-item bottom taskbar (Overview, Cards, Calculator, Compare, Sources), including safe-area spacing for Android gesture navigation. Desktop navigation stays in the top bar.
+- Adds a browser-supported **Install app** button when Chrome exposes the PWA install prompt. The site continues to work normally if install prompting or service-worker registration is unavailable.
+- Updates package/Worker release metadata, the visible version pill, all page footers, asset cache keys, user-agent and tests to **0.6.13 / build 20261023.11**.
+
 ## Release 0.6.12 — 23 October 2026
 
 - Adds a deterministic official source bundle for **YES BANK UNI Credit Card**, whose product and catalogue pages are JavaScript-rendered for the importer.
