@@ -1,5 +1,12 @@
 # Credit Card Rewards Intelligence (Cloudflare)
 
+## Release 0.6.21 — 23 October 2026
+
+- Fixes GoldX source discovery when the card variant field contains only `GoldX` under YES BANK; the app now selects official Uni GoldX product, campaign and app-listing sources without falling back to legacy UNI MITC/KFS documents.
+- Adds a regression test for the exact short-variant input shown in Source Review.
+- Aligns package metadata, backend/frontend version pill, service-worker cache and asset cache-busters to **0.6.21 / build 20261023.19**.
+
+
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
 ## Release 0.6.15 — 23 October 2026
