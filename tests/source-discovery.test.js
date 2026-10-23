@@ -278,3 +278,23 @@ test("validates an optional supplied URL against the selected card issuer", asyn
     /Only HTTPS/
   );
 });
+
+
+test("uses a stable official Regalia Gold source bundle including the dedicated fees page", async () => {
+  const originalFetch = globalThis.fetch;
+  let networkCalls = 0;
+  globalThis.fetch = async () => {
+    networkCalls += 1;
+    throw new Error("Curated Regalia Gold fallback should not depend on search availability.");
+  };
+  try {
+    const results = await discoverOfficialUrls("HDFC Bank", "Regalia Gold");
+    assert.equal(results[0].url, "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card");
+    assert.ok(results.some(item => item.url === "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card/fees-and-charges"));
+    assert.ok(results.some(item => item.url.includes("regalia-gold-travel-edge-tnc.pdf")));
+    assert.ok(results.some(item => item.url.includes("terms-and-conditions.pdf")));
+    assert.equal(networkCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
