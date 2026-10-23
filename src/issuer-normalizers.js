@@ -483,7 +483,7 @@ export function normalizeCommonCardFacts(data, context = {}) {
   if (networkFact) {
     data.network = networkFact.value;
     data.missingItems = data.missingItems.filter(item =>
-      !/payment network specification|could not verify the payment network/i.test(String(item))
+      !/payment network/i.test(String(item))
     );
   } else if (isUnknownCardNetwork(data.network)) {
     data.network = null;
