@@ -4,9 +4,17 @@ const BASE_CONTINUATION_PATTERN = /\bbase reward points?\b.{0,140}\b(?:continue|
 
 function officialSourceSections(sourceText, fallbackUrl) {
   const sections = [];
-  const pattern = /OFFICIAL SOURCE\s+\d+\s*\nTITLE:\s*([^\n]+)\s*\nURL:\s*(https:\/\/[^\s]+)\s*\nSOURCE TEXT START\s*\n([\s\S]*?)\s*\nSOURCE TEXT END/g;
+  // Source Review assembles supplementary sources as "Title / URL / Document text",
+  // while older callers and unit fixtures use "TITLE / SOURCE TEXT START/END".
+  // Accept both formats so issuer-specific normalizers can retain per-source URLs
+  // and parse facts across every official document in the assembled bundle.
+  const pattern = /OFFICIAL SOURCE\\s+\\d+\\s*\\n(?:TITLE|Title):\\s*([^\\n]+)\\s*\\nURL:\\s*(https:\\/\\/[^\\s]+)\\s*\\n(?:SOURCE TEXT START\\s*\\n([\\s\\S]*?)\\s*\\nSOURCE TEXT END|Document text:\\s*\\n([\\s\\S]*?))(?=\\n\\s*\\nOFFICIAL SOURCE\\s+\\d+|\\s*$)/gi;
   for (const match of String(sourceText || "").matchAll(pattern)) {
-    sections.push({ title: match[1].trim(), url: match[2].trim(), text: match[3] });
+    sections.push({
+      title: match[1].trim(),
+      url: match[2].trim(),
+      text: String(match[3] ?? match[4] ?? "").trim()
+    });
   }
   if (!sections.length && String(sourceText || "").trim()) {
     sections.push({ title: "Official issuer source", url: fallbackUrl || "", text: String(sourceText) });
