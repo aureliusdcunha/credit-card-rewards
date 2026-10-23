@@ -4,9 +4,17 @@ const BASE_CONTINUATION_PATTERN = /\bbase reward points?\b.{0,140}\b(?:continue|
 
 function officialSourceSections(sourceText, fallbackUrl) {
   const sections = [];
-  const pattern = /OFFICIAL SOURCE\s+\d+\s*\nTITLE:\s*([^\n]+)\s*\nURL:\s*(https:\/\/[^\s]+)\s*\nSOURCE TEXT START\s*\n([\s\S]*?)\s*\nSOURCE TEXT END/g;
+  // Source Review assembles supplementary sources as "Title / URL / Document text",
+  // while older callers and unit fixtures use "TITLE / SOURCE TEXT START/END".
+  // Accept both formats so issuer-specific normalizers can retain per-source URLs
+  // and parse facts across every official document in the assembled bundle.
+  const pattern = /OFFICIAL SOURCE\s+\d+\s*\n(?:TITLE|Title):\s*([^\n]+)\s*\nURL:\s*(https:\/\/[^\s]+)\s*\n(?:SOURCE TEXT START\s*\n([\s\S]*?)\s*\nSOURCE TEXT END|Document text:\s*\n([\s\S]*?))(?=\n\s*\nOFFICIAL SOURCE\s+\d+|\s*$)/gi;
   for (const match of String(sourceText || "").matchAll(pattern)) {
-    sections.push({ title: match[1].trim(), url: match[2].trim(), text: match[3] });
+    sections.push({
+      title: match[1].trim(),
+      url: match[2].trim(),
+      text: String(match[3] ?? match[4] ?? "").trim()
+    });
   }
   if (!sections.length && String(sourceText || "").trim()) {
     sections.push({ title: "Official issuer source", url: fallbackUrl || "", text: String(sourceText) });
@@ -63,6 +71,101 @@ function addBenefitFromRule(data, rule, sourceText, fallbackUrl, description) {
   });
 }
 
+
+function addSourceBackedBaseRules(data, sections) {
+  if (!Array.isArray(data.rules)) data.rules = [];
+  const hasUsableRule = category => data.rules.some(rule =>
+    rule && rule.category === category &&
+    Number.isFinite(Number(rule.rate)) && Number(rule.rate) >= 0 &&
+    Number.isFinite(Number(rule.perAmount)) && Number(rule.perAmount) > 0 &&
+    String(rule.unit || "").trim()
+  );
+  const unit = String(data.rewardCurrency || "Reward Points");
+  const addRule = (category, rate, perAmount, quote, section) => {
+    if (hasUsableRule(category)) return;
+    if (!Number.isFinite(rate) || rate < 0 || !Number.isFinite(perAmount) || perAmount <= 0) return;
+    if (category === "general") foundGeneralRate = true;
+    data.rules.push({
+      category,
+      label: category === "general" ? "Base retail reward rate" : "Source-stated " + category.replace(/_/g, " ") + " reward rate",
+      rate,
+      perAmount,
+      unit,
+      minTransaction: null,
+      cap: null,
+      rounding: "down",
+      validFrom: null,
+      validTo: null,
+      sourceQuote: quote,
+      sourceUrl: section.url || null,
+      notes: "Structured from an explicit numeric earning rate in the official source bundle. Verify transaction eligibility and effective date before publishing."
+    });
+  };
+
+  let foundGeneralRate = false;
+  for (const section of sections) {
+    const text = String(section.text || "");
+    const flat = text.replace(/\s+/g, " ").trim();
+    const direct = /(?:base\s+)?(\d+(?:\.\d+)?)\s*(?:reward\s*)?points?\s+(?:for\s+every|on\s+every|per|for\s+each)\s*(?:₹|rs\.?\s*|inr\s*)?([\d,]+(?:\.\d+)?)(?:\s*(?:spent|spends|spend|transaction))?/ig;
+    for (const match of flat.matchAll(direct)) {
+      const rate = Number(match[1]);
+      const perAmount = Number(String(match[2]).replace(/,/g, ""));
+      const quote = match[0];
+      const category = /\binternational\b/i.test(quote) ? "international"
+        : /\b(?:utility|utilities|insurance)\b/i.test(quote) ? (/\butility|utilities\b/i.test(quote) ? "utilities" : "insurance")
+        : "general";
+      addRule(category, rate, perAmount, quote, section);
+    }
+
+    // Some issuer pages render a rate table as a denominator heading followed
+    // by rows such as "4 On International Spend / 2 On Domestic Spend / 1 On
+    // Utility and Insurance Spend", with no repeated "points per ₹100" wording.
+    const basis = flat.match(/(?:earn|earning)\s+(?:reward\s+)?points?\s+on\s+every\s*(?:₹|rs\.?\s*|inr\s*)?([\d,]+(?:\.\d+)?)\s*(?:spent|spend)/i);
+    if (!basis) continue;
+    const perAmount = Number(String(basis[1]).replace(/,/g, ""));
+    const rows = [
+      { category: "international", pattern: /\b(\d+(?:\.\d+)?)\s+(?:reward\s+)?points?\s+on\s+international\s+spend\b|\b(\d+(?:\.\d+)?)\s+on\s+international\s+spend\b/i },
+      { category: "general", pattern: /\b(\d+(?:\.\d+)?)\s+(?:reward\s+)?points?\s+on\s+domestic\s+spend\b|\b(\d+(?:\.\d+)?)\s+on\s+domestic\s+spend\b/i },
+      { category: "utilities", pattern: /\b(\d+(?:\.\d+)?)\s+(?:reward\s+)?points?\s+on\s+utility(?:\s+and\s+insurance)?\s+spend\b|\b(\d+(?:\.\d+)?)\s+on\s+utility(?:\s+and\s+insurance)?\s+spend\b/i },
+      { category: "insurance", pattern: /\b(\d+(?:\.\d+)?)\s+(?:reward\s+)?points?\s+on\s+insurance\s+spend\b|\b(\d+(?:\.\d+)?)\s+on\s+insurance\s+spend\b/i }
+    ];
+    for (const row of rows) {
+      const match = row.pattern.exec(flat);
+      if (!match) continue;
+      const rate = Number(match[1] || match[2]);
+      const start = Math.max(0, match.index - 30);
+      const quote = flat.slice(start, Math.min(flat.length, match.index + match[0].length + 30)).trim();
+      addRule(row.category, rate, perAmount, quote, section);
+      if (row.category === "utilities" && /utility\s+and\s+insurance/i.test(match[0])) {
+        addRule("insurance", rate, perAmount, quote, section);
+      }
+    }
+  }
+  if (foundGeneralRate) {
+    data.missingItems = (Array.isArray(data.missingItems) ? data.missingItems : []).filter(item =>
+      !/base reward point earning rate|base reward rate|general spend.*reward rate/i.test(String(item))
+    );
+  }
+}
+
+function findMccExclusionFacts(sections) {
+  const facts = [];
+  const seen = new Set();
+  for (const section of sections) {
+    const clauses = officialClauses([section]);
+    for (const clause of clauses) {
+      if (!/\bMCC(?:s|\s+codes?)?\b|merchant category codes?/i.test(clause.quote)) continue;
+      if (!/\b(?:exclud(?:e|ed|es|ing|sion)|not eligible|ineligible|will not earn|do not earn|no reward|not earn reward)\b/i.test(clause.quote)) continue;
+      const codes = [...new Set(clause.quote.match(/\b\d{4}\b/g) || [])];
+      if (!codes.length) continue;
+      const key = clause.url + "|" + clause.quote.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      facts.push({ url: clause.url || null, title: clause.title, quote: clause.quote, codes });
+    }
+  }
+  return facts;
+}
 
 function findOfficialFact(sourceText, regex) {
   for (const section of officialSourceSections(sourceText, "")) {
@@ -379,12 +482,16 @@ export function normalizeCommonCardFacts(data, context = {}) {
   const networkFact = extractExplicitCardNetwork(sections);
   if (networkFact) {
     data.network = networkFact.value;
+    data.missingItems = data.missingItems.filter(item =>
+      !/payment network/i.test(String(item))
+    );
   } else if (isUnknownCardNetwork(data.network)) {
     data.network = null;
     addMissingItem(data, "Could not verify the payment network for this exact card variant from the supplied official source. Confirm Visa, Mastercard, RuPay, American Express or other network details before publishing.");
   }
 
   const clauses = officialClauses(sections);
+  addSourceBackedBaseRules(data, sections);
   const combinedMembershipFact = combinedMembershipFeeFact(sections);
   const parsedJoiningFact = explicitFeeFact(clauses, "joining");
   const parsedAnnualFact = explicitFeeFact(clauses, "annual");
@@ -400,8 +507,34 @@ export function normalizeCommonCardFacts(data, context = {}) {
     : parsedAnnualFact;
   const waiverFact = findWaiverFact(clauses);
 
-  if (joiningFact) data.joiningFee = joiningFact.amount;
-  if (annualFact) data.annualFee = annualFact.amount;
+  // Preserve MCC-specific exclusions as source-backed review data. These codes
+  // are not interchangeable with broad spend categories and should not be guessed.
+  const mccFacts = findMccExclusionFacts(sections);
+  if (mccFacts.length) {
+    genericUpsertBenefit(data, {
+      name: "MCC-based reward exclusions",
+      description: "Official-source MCC exclusion clauses found: " + [...new Set(mccFacts.flatMap(fact => fact.codes))].sort().join(", ") + ". Check the quoted terms for the transaction types and scope that each code excludes.",
+      conditions: mccFacts.map(fact => fact.quote).join(" "),
+      sourceQuote: mccFacts.map(fact => fact.quote).join(" "),
+      sourceUrl: mccFacts[0].url || null
+    });
+    if (new Set(mccFacts.flatMap(fact => fact.codes)).size >= 2) {
+      data.missingItems = data.missingItems.filter(item => !/detailed list of mcc code exclusions/i.test(String(item)));
+    }
+  }
+
+  if (joiningFact) {
+    data.joiningFee = joiningFact.amount;
+    data.missingItems = data.missingItems.filter(item =>
+      !/exact numerical joining fee amount|joining fee amount/i.test(String(item))
+    );
+  }
+  if (annualFact) {
+    data.annualFee = annualFact.amount;
+    data.missingItems = data.missingItems.filter(item =>
+      !/exact numerical annual fee amount|annual fee amount/i.test(String(item))
+    );
+  }
   if (waiverFact) data.annualFeeWaiver = waiverFact.quote;
 
   if (joiningFact || annualFact) {
