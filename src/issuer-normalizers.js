@@ -721,3 +721,163 @@ export function normalizeHdfcRegaliaExtraction(data, context = {}) {
   addMissingItem(data, "Could not verify the current Regalia Gold base rate from the supplied source text. Include the official terms containing '5 Reward Points for every ₹200 spends' before publishing the base rate.");
   return data;
 }
+
+
+
+/**
+ * Generic normalization for accelerated reward clauses across issuers.
+ * Numeric rules are only created when the source and a verified base rate make
+ * the multiplier relationship explicit. Vague "up to" offers remain benefits.
+ */
+export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
+  if (!data || typeof data !== "object") return data;
+  if (!Array.isArray(data.rules)) data.rules = [];
+  if (!Array.isArray(data.benefits)) data.benefits = [];
+  if (!Array.isArray(data.missingItems)) data.missingItems = [];
+
+  const sourceText = String(context.sourceText || "");
+  const fallbackUrl = String(context.sourceUrl || "");
+  const sections = officialSourceSections(sourceText, fallbackUrl);
+  if (!sections.length) return data;
+
+  const baseRule = data.rules.find(rule =>
+    rule && rule.category === "general" &&
+    Number.isFinite(Number(rule.rate)) && Number(rule.rate) > 0 &&
+    Number.isFinite(Number(rule.perAmount)) && Number(rule.perAmount) > 0 &&
+    String(rule.unit || "").trim()
+  );
+  const generated = [];
+  const generatedQuotes = new Set();
+  let sawUnquantifiedAccelerator = false;
+
+  const normalizeMerchantText = value => String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/[;,.\s]+$/, "")
+    .trim();
+
+  for (const section of sections) {
+    const chunks = String(section.text || "").split(/\n+/).map(value => value.trim()).filter(Boolean);
+    for (const chunk of chunks) {
+      const sentences = chunk.split(/(?<=[.!?])\s+(?=[A-Z0-9])/).map(value => value.trim()).filter(Boolean);
+      for (const sentence of sentences) {
+        const matches = [...sentence.matchAll(/\b(\d+(?:\.\d+)?)\s*[x×]\s*(?:reward\s*)?(?:points?|rewards?|miles?)\b/gi)];
+        if (!matches.length) continue;
+
+        for (const match of matches) {
+          const matchIndex = match.index || 0;
+          const before = sentence.slice(Math.max(0, matchIndex - 28), matchIndex);
+          const sentenceKey = sentence.replace(/\s+/g, " ").trim();
+          if (/\b(?:up\s*to|upto|between|from)\s*$/i.test(before) ||
+              /\b(?:up\s*to|upto)\s+\d+\s*[x×]/i.test(sentence) ||
+              /\d+\s*[x×]\s*(?:to|[-–])\s*\d+\s*[x×]/i.test(sentence)) {
+            sawUnquantifiedAccelerator = true;
+            continue;
+          }
+          if (generatedQuotes.has(sentenceKey)) continue;
+
+          // If the same clause already has an explicit absolute rate, leave its
+          // normalization to the ordinary numeric-rule extraction path.
+          const denominatorMatch = sentence.match(/\b(\d+(?:\.\d+)?)\s*(?:reward\s*)?points?\s+(?:for\s+every|per|on\s+every)\s*(?:₹|rs\.?\s*|inr\s*)?([\d,]+(?:\.\d+)?)(?:\s*(?:spent|spend|transaction))?/i);
+          if (denominatorMatch && !/\b(?:base reward points|incremental reward points|bonus points)\b/i.test(sentence)) continue;
+
+          const multiplier = Number(match[1]);
+          if (!Number.isFinite(multiplier) || multiplier <= 1) continue;
+
+          const merchantMatch = sentence.match(/(?:select|eligible|participating)\s+merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/i) ||
+            sentence.match(/(?:at|on)\s+(?:the\s+)?merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/i);
+          let merchantCondition = normalizeMerchantText(merchantMatch?.[1] || "");
+          if (/^(?:and more|etc|etcetera)$/i.test(merchantCondition)) merchantCondition = "";
+          const hasNamedCondition = Boolean(merchantCondition) ||
+            /\b(?:dining|grocery|groceries|departmental stores?|movies|travel|flights?|hotels?|fuel|insurance|utility|utilities|bill pay|rent|wallet|school fees|online|offline|e-?com|pos|smartbuy|transactions?)\b/i.test(sentence);
+          if (!hasNamedCondition) continue;
+          if (!baseRule) {
+            sawUnquantifiedAccelerator = true;
+            continue;
+          }
+
+          const hasBaseContinuation = /\bbase\s+(?:reward\s+)?points?\b[\s\S]{0,220}\b(?:continue|continues|continued|as is|without any capping|no capping|not be capped)\b/i.test(section.text) ||
+            /\bincremental\s+(?:accelerated\s+)?reward\s+points?\b/i.test(section.text);
+          const explicitlyAdditional = /\b(?:additional|incremental|bonus)\b/i.test(before + " " + sentence.slice(matchIndex, matchIndex + match[0].length + 55));
+          const isBonus = explicitlyAdditional || hasBaseContinuation;
+          const effectiveFactor = explicitlyAdditional ? multiplier : hasBaseContinuation ? Math.max(0, multiplier - 1) : multiplier;
+          if (effectiveFactor <= 0) continue;
+
+          const amountRate = Number(baseRule.rate) * effectiveFactor;
+          const denominator = Number(baseRule.perAmount);
+          if (!Number.isFinite(amountRate) || amountRate <= 0 || denominator <= 0) continue;
+
+          const sectionHasPointCap = /(?:capped|cap|maximum|limit)[^.]{0,90}\b(?:reward\s*)?points?\b/i.test(section.text);
+          const pointCapMatch = section.text.match(/(?:capped\s+at|cap(?:ped)?\s+(?:of|at)|maximum\s+(?:cap\s+)?of)\s*(?:₹|rs\.?\s*)?([\d,]+)\s*(?:rp|reward\s+points?|points?)\s*(?:per|\/|a)\s*(?:calendar\s+)?month/i) ||
+            section.text.match(/([\d,]+)\s*(?:rp|reward\s+points?)\s*(?:per|\/|a)\s*(?:calendar\s+)?month[^.\n]{0,80}\b(?:cap|capped|maximum)\b/i);
+          const minimumMatch = section.text.match(/(?:minimum\s+transaction(?:\s+value)?|minimum\s+purchase)(?:\s+to\s+be\s+eligible(?:\s+for\s+the\s+offer)?)?\s*(?:is|of|:)?\s*(?:₹|rs\.?\s*|inr\s*)?([\d,]+(?:\.\d+)?)/i);
+          const capValue = pointCapMatch ? Number(String(pointCapMatch[1]).replace(/,/g, "")) : null;
+          const minTransaction = minimumMatch ? Number(String(minimumMatch[1]).replace(/,/g, "")) : null;
+          const cap = sectionHasPointCap && Number.isFinite(capValue) && capValue >= 0
+            ? {
+                type: "points",
+                value: capValue,
+                period: /calendar\s+month/i.test(section.text) ? "calendar_month" : "month",
+                overCapCategory: "general"
+              }
+            : null;
+
+          const label = (isBonus ? String(multiplier) + "X accelerated bonus" : String(multiplier) + "X accelerated total") +
+            (merchantCondition ? " — " + merchantCondition : " — " + sentence.replace(/\s+/g, " ").slice(0, 100));
+          const channelMatch = section.text.match(/(?:can be accumulated|eligible|applicable|valid)\s+(?:for|on|in|through)\s+([^.\n]{1,160}(?:e-?com|pos|point.of.sale|online|offline|smartbuy|portal|app)[^.\n]{0,100})/i);
+          const channelCondition = channelMatch ? normalizeMerchantText(channelMatch[1]) : "";
+          const noteParts = [
+            isBonus
+              ? "Separate accelerated bonus component: " + effectiveFactor + "× the verified base rate. The standard base rule continues separately."
+              : "Source describes " + multiplier + "× total rewards; normalized using the verified base rate. Confirm the issuer's multiplier definition during review.",
+            merchantCondition ? "Eligible merchants: " + merchantCondition + "." : "",
+            channelCondition ? "Channel condition: " + channelCondition + "." : "",
+            cap ? "The source states a " + cap.value.toLocaleString("en-IN") + " point monthly cap for this accelerated component; use the general base rate after the accelerated cap is exhausted." : "",
+            minTransaction != null && Number.isFinite(minTransaction) ? "Minimum transaction: ₹" + minTransaction.toLocaleString("en-IN") + "." : "",
+            "This merchant/channel-conditional rule is retained as a separate record but excluded from generic calculator estimates until the specific merchant and channel can be matched."
+          ].filter(Boolean);
+
+          generated.push({
+            category: "other",
+            label,
+            merchantCondition: merchantCondition || null,
+            channelCondition: channelCondition || null,
+            isAccelerated: true,
+            isBonus,
+            multiplier,
+            calculatorEligible: false,
+            rate: amountRate,
+            perAmount: denominator,
+            unit: String(baseRule.unit || data.rewardCurrency || "Rewards"),
+            minTransaction: Number.isFinite(minTransaction) && minTransaction >= 0 ? minTransaction : null,
+            cap,
+            rounding: baseRule.rounding || "down",
+            validFrom: null,
+            validTo: null,
+            sourceQuote: sentenceKey,
+            sourceUrl: section.url || fallbackUrl || baseRule.sourceUrl || null,
+            notes: noteParts.join(" ")
+          });
+          generatedQuotes.add(sentenceKey);
+        }
+      }
+    }
+  }
+
+  if (generated.length) {
+    // Remove an incomplete pseudo-rule for the same multiplier clause, but keep
+    // ordinary rules and explicitly quantified rules untouched.
+    data.rules = data.rules.filter(rule => {
+      const quote = String(rule.sourceQuote || "").replace(/\s+/g, " ").trim();
+      return !generatedQuotes.has(quote) ||
+        (rule.isAccelerated === true && rule.calculatorEligible === false);
+    });
+    data.missingItems = data.missingItems.filter(item =>
+      !/5X selected-merchant offer was retained as a benefit, not a generic calculator rule/i.test(String(item))
+    );
+    data.rules.push(...generated);
+  } else if (sawUnquantifiedAccelerator) {
+    addMissingItem(data, "An accelerated/multiplier reward offer appears in the official source, but no unambiguous calculator-ready rate, channel or base-rate relationship was available. It remains a benefit pending source review; no numeric accelerated rule was invented.");
+  }
+
+  return data;
+}
