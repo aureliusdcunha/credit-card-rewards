@@ -331,7 +331,15 @@ async function aiExtract(request, env) {
     try {
       const discovered = await discoverOfficialUrls(body.issuer, body.cardName);
       const isPdf = item => /\.pdf(?:[?#]|$)/i.test(String(item.url || "")) || /\bpdf\b/i.test(String(item.title || ""));
-      const htmlCandidates = discovered.filter(item => !isPdf(item) && !seenUrls.has(normalizeUrl(item.url))).slice(0, isUniGoldX ? 3 : 2);
+      const sourceCandidatePriority = item => {
+        const text = String(item.title || "") + " " + String(item.url || "");
+        return (/(?:fees?|charges|membership|joining|renewal)/i.test(text) ? 40 : 0)
+          + (/(?:terms|conditions|mitc|mcc|exclusion|reward|points|accelerated|smartbuy|ishop|cap|capping)/i.test(text) ? 30 : 0)
+          + (/(?:credit.?card|sapphiro|regalia|gold)/i.test(text) ? 10 : 0);
+      };
+      const htmlCandidates = discovered.filter(item => !isPdf(item) && !seenUrls.has(normalizeUrl(item.url)))
+        .sort((a, b) => sourceCandidatePriority(b) - sourceCandidatePriority(a))
+        .slice(0, 3);
       for (const candidate of htmlCandidates) {
         try {
           const related = await fetchOfficialSource(candidate.url, env.AI, env, body.cardName);
@@ -348,24 +356,30 @@ async function aiExtract(request, env) {
           console.warn("Supplementary official source could not be read:", String(error?.message || error).slice(0, 180));
         }
       }
-      // If the product pages are unreadable, try one additional official terms PDF.
-      if (sourceParts.length === 1) {
-        const pdfCandidate = discovered.find(item => isPdf(item) && !seenUrls.has(normalizeUrl(item.url)));
-        if (pdfCandidate) {
-          try {
-            const related = await fetchOfficialSource(pdfCandidate.url, env.AI, env, body.cardName);
-            if (related.text && (related.readableTextLength ?? related.text.length) >= 100) {
-              const normalized = normalizeUrl(related.url || pdfCandidate.url);
-              if (!seenUrls.has(normalized)) {
-                seenUrls.add(normalized);
-                sourceParts.push({
-                  title: related.title || pdfCandidate.title || "Supplementary official terms PDF",
-                  url: normalized,
-                  text: related.text
-                });
-              }
-            }
-          } catch (error) {
+      // Read official terms PDFs even when HTML pages were readable. Product pages
+      // often advertise rewards while caps, MCC exclusions and eligibility live only
+      // in linked PDFs. Keep the number bounded and rank detailed terms first.
+      const pdfCandidates = discovered
+        .filter(item => isPdf(item) && !seenUrls.has(normalizeUrl(item.url)))
+        .sort((a, b) => sourceCandidatePriority(b) - sourceCandidatePriority(a))
+        .slice(0, 2);
+      for (const pdfCandidate of pdfCandidates) {
+        try {
+          const related = await fetchOfficialSource(pdfCandidate.url, env.AI, env, body.cardName);
+          if (!related.text || (related.readableTextLength ?? related.text.length) < 100) continue;
+          const normalized = normalizeUrl(related.url || pdfCandidate.url);
+          if (seenUrls.has(normalized)) continue;
+          seenUrls.add(normalized);
+          sourceParts.push({
+            title: related.title || pdfCandidate.title || "Supplementary official terms PDF",
+            url: normalized,
+            text: related.text
+          });
+        } catch (error) {
+          console.warn("Supplementary official terms PDF could not be read:", String(error?.message || error).slice(0, 180));
+        }
+      }
+    } catch (error) {
             console.warn("Supplementary official PDF could not be read:", String(error?.message || error).slice(0, 180));
           }
         }
@@ -376,7 +390,7 @@ async function aiExtract(request, env) {
     }
     if (sourceParts.length > 0 && (sourceParts.length > 1 || !primaryIncluded)) {
       sourceText = sourceParts.map((source, index) =>
-        `OFFICIAL SOURCE ${index + 1}\nTitle: ${source.title}\nURL: ${source.url}\nDocument text:\n${prioritizeOfficialSourceText(source.text, index === 0 ? 18000 : 12000)}`
+        `OFFICIAL SOURCE ${index + 1}\nTitle: ${source.title}\nURL: ${source.url}\nDocument text:\n${prioritizeOfficialSourceText(source.text, index === 0 ? 12000 : 6000)}`
       ).join("\n\n").slice(0, MAX_SOURCE_CHARS);
     } else if (!primaryIncluded) {
       sourceText = "";
