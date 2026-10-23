@@ -8,7 +8,7 @@ function officialSourceSections(sourceText, fallbackUrl) {
   // while older callers and unit fixtures use "TITLE / SOURCE TEXT START/END".
   // Accept both formats so issuer-specific normalizers can retain per-source URLs
   // and parse facts across every official document in the assembled bundle.
-  const pattern = /OFFICIAL SOURCE\\s+\\d+\\s*\\n(?:TITLE|Title):\\s*([^\\n]+)\\s*\\nURL:\\s*(https:\\/\\/[^\\s]+)\\s*\\n(?:SOURCE TEXT START\\s*\\n([\\s\\S]*?)\\s*\\nSOURCE TEXT END|Document text:\\s*\\n([\\s\\S]*?))(?=\\n\\s*\\nOFFICIAL SOURCE\\s+\\d+|\\s*$)/gi;
+  const pattern = /OFFICIAL SOURCE\s+\d+\s*\n(?:TITLE|Title):\s*([^\n]+)\s*\nURL:\s*(https:\/\/[^\s]+)\s*\n(?:SOURCE TEXT START\s*\n([\s\S]*?)\s*\nSOURCE TEXT END|Document text:\s*\n([\s\S]*?))(?=\n\s*\nOFFICIAL SOURCE\s+\d+|\s*$)/gi;
   for (const match of String(sourceText || "").matchAll(pattern)) {
     sections.push({
       title: match[1].trim(),
