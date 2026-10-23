@@ -1259,3 +1259,32 @@ textarea::selection,
 @media (prefers-reduced-motion:reduce) {
   .bottom-taskbar .taskbar-link,.pwa-install-button { transition:none; }
 }
+
+
+/* 0.6.16 — Responsive mobile card catalogue */
+@media (max-width: 720px) {
+  .card-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .credit-card-tile { width: 100%; min-width: 0; padding: 16px; }
+  .toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+  .toolbar .search-box { width: 100%; min-width: 0; }
+  .toolbar select {
+    display: block;
+    width: 100%;
+    flex: 0 0 46px;
+    min-width: 0;
+    min-height: 46px;
+    height: 46px;
+    padding: 0 36px 0 12px;
+    line-height: normal;
+    font-size: 12px;
+    border-radius: 7px;
+  }
+  .toolbar input { min-height: 46px; }
+  .card-grid .tile-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

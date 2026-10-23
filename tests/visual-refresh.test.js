@@ -46,7 +46,7 @@ test("all pages reference the current release and cache-busted assets", async ()
     "../public/sources.html"
   ]) {
     const html = await read(path);
-    assert.ok(html.includes("app.css?v=0.6.15.0"), path + " needs the terminal stylesheet cache key");
+    assert.ok(html.includes(`app.css?v=${APP_VERSION}.0`), path + " needs the terminal stylesheet cache key");
     assert.ok(html.includes(`v${APP_VERSION} · build ${APP_BUILD}`), path + " needs current release metadata");
   }
   const layout = await read("../public/js/layout.js");
@@ -72,4 +72,13 @@ test("calculator and comparison selectors include SimplySAVE accelerated categor
     assert.match(html, /<option value="movies">Movies<\/option>/);
     assert.match(html, /<option value="departmental_stores">Departmental stores<\/option>/);
   }
+});
+
+
+test("mobile catalogue uses compact filters and one card per row", async () => {
+  const css = await read("../public/css/app.css");
+  assert.match(css, /0\.6\.16\s+—\s+Responsive mobile card catalogue/);
+  assert.match(css, /@media \(max-width:\s*720px\)\s*\{[^}]*\.card-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
+  assert.match(css, /\.toolbar select\s*\{[^}]*height:\s*46px/s);
+  assert.match(css, /\.card-grid \.tile-meta\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
 });
