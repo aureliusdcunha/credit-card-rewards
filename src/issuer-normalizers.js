@@ -797,9 +797,16 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
           const multiplier = Number(match[1]);
           if (!Number.isFinite(multiplier) || multiplier <= 1) continue;
 
+          // Cap-only sentences describe a limit on an offer already defined
+          // elsewhere in the section; they must not become a second earning rule.
+          const capOnlySentence = /\b(?:cap|capped|maximum|limit)\b/i.test(sentence) &&
+            !/\b(?:select(?:ed)?\s+merchants?|eligible\s+merchants?|spends?\s+(?:at|on|through|via)|purchases?\s+(?:at|on|through|via)|transactions?\s+(?:at|on|through|via)|dining|grocery|groceries|departmental stores?|movies|travel|flights?|hotels?|fuel|insurance|utility|utilities|bill pay|rent|wallet|school fees|e-?com|pos|smartbuy)\b/i.test(sentence);
+          if (capOnlySentence) continue;
+
           const merchantMatches = [
             ...sentence.matchAll(/(?:select|selected|eligible|participating)\s+merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi),
-            ...sentence.matchAll(/(?:at|on)\s+(?:(?:the|select|selected|eligible|participating)\s+)?merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi)
+            ...sentence.matchAll(/(?:at|on)\s+(?:(?:the|select|selected|eligible|participating)\s+)?merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi),
+            ...sentence.matchAll(/(?:spends?|spent|purchases?|transactions?)\s+(?:at|on|through|via)\s+([^.;\n]+)/gi)
           ].sort((a, b) => (a.index || 0) - (b.index || 0));
           const merchantMatch = merchantMatches[merchantMatches.length - 1] || null;
           let merchantCondition = normalizeMerchantText(merchantMatch?.[1] || "");
@@ -902,6 +909,37 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
             minTransaction != null && Number.isFinite(minTransaction) ? "Minimum transaction: ₹" + minTransaction.toLocaleString("en-IN") + "." : "",
             "This merchant/channel-conditional rule is retained as a separate record but excluded from generic calculator estimates until the specific merchant and channel can be matched."
           ].filter(Boolean);
+
+          const merchantKey = value => normalizeMerchantText(value)
+            .toLowerCase()
+            .replace(/\band\s+more\b|\betc(?:etera)?\b/g, " ")
+            .split(/[^a-z0-9]+/)
+            .filter(token => token.length > 2 && !["selected", "select", "eligible", "merchants", "brands", "spends", "spend", "reward", "rewards", "points", "point", "transactions", "transaction", "online", "offline", "through", "via"].includes(token));
+          const newMerchantTokens = new Set(merchantKey(merchantCondition));
+          const equivalentGenerated = generated.find(rule => {
+            if (Number(rule.multiplier) !== multiplier) return false;
+            const priorTokens = merchantKey(rule.merchantCondition);
+            if (!newMerchantTokens.size || !priorTokens.length) return !newMerchantTokens.size && !priorTokens.length;
+            const overlap = priorTokens.filter(token => newMerchantTokens.has(token)).length;
+            const smaller = Math.min(priorTokens.length, newMerchantTokens.size);
+            return (overlap >= 2 && overlap / smaller >= 0.6) ||
+              normalizeMerchantText(rule.merchantCondition).toLowerCase() === normalizeMerchantText(merchantCondition).toLowerCase();
+          });
+          if (equivalentGenerated) {
+            // One offer may span several sentences (merchant list, channel,
+            // minimum spend and cap) or appear in product page plus terms PDF.
+            // Keep a single rule and prefer the more complete merchant list.
+            const existingTokens = merchantKey(equivalentGenerated.merchantCondition);
+            if (newMerchantTokens.size > existingTokens.length &&
+                !/\band\s+more\b/i.test(merchantCondition)) {
+              equivalentGenerated.merchantCondition = merchantCondition;
+              equivalentGenerated.label = (equivalentGenerated.isBonus ? String(equivalentGenerated.multiplier) + "X accelerated bonus" : String(equivalentGenerated.multiplier) + "X accelerated total") + " — " + merchantCondition;
+            }
+            if (channelCondition && !equivalentGenerated.channelCondition) equivalentGenerated.channelCondition = channelCondition;
+            if (cap && !equivalentGenerated.cap) equivalentGenerated.cap = cap;
+            if (minTransaction != null && equivalentGenerated.minTransaction == null) equivalentGenerated.minTransaction = minTransaction;
+            continue;
+          }
 
           generated.push({
             category: "other",
