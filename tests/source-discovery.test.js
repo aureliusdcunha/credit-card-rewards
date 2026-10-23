@@ -414,3 +414,114 @@ test("manual MITC source review supplements the PDF with official card-page rewa
     globalThis.fetch = originalFetch;
   }
 });
+
+
+// GoldX is a distinct product and must not fall back to legacy YES BANK UNI terms.
+test("discovers exact Uni GoldX sources instead of the legacy UNI Credit Card catalogue and MITC", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error("GoldX curated fallback should not depend on search"); };
+  try {
+    const results = await discoverOfficialUrls("YES Bank", "UNI Gold X");
+    assert.equal(results[0].url, "https://www.uni.cards/");
+    assert.ok(results.some(item => item.url === "https://www.uni.cards/campaign/?type=creative_2"));
+    assert.ok(!results.some(item => item.url.includes("CC_YesBank_MITC.pdf")));
+    assert.ok(!results.some(item => item.url.includes("yesbank_key_fact_statement.pdf")));
+    assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("allows Uni official domains only for the exact GoldX variant", () => {
+  assert.equal(validateIssuerOfficialUrl("https://www.uni.cards/", "YES Bank", "UNI GoldX").hostname, "www.uni.cards");
+  assert.throws(
+    () => validateIssuerOfficialUrl("https://www.uni.cards/", "YES Bank", "UNI Credit Card"),
+    /domain does not match YES Bank/
+  );
+});
+
+
+test("GoldX source review rejects legacy UNI MITC evidence and reads GoldX reward tiers", async () => {
+  const originalFetch = globalThis.fetch;
+  let extractionPrompt = "";
+  const validDraft = {
+    issuer: "YES Bank",
+    cardName: "UNI Gold X",
+    network: null,
+    rewardCurrency: "Uni Coins",
+    annualFee: null,
+    joiningFee: null,
+    annualFeeWaiver: null,
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [],
+    missingItems: ["Verify exact variant-specific network and complete GoldX reward terms."],
+    summary: "Draft awaiting review."
+  };
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    if (url.hostname === "webcdn.uni.cards" && url.pathname === "/nxwave/docs/CC_YesBank_MITC.pdf") {
+      return new Response(new Uint8Array([37, 80, 68, 70]), { headers: { "content-type": "application/pdf" } });
+    }
+    if (url.hostname === "www.uni.cards" && url.pathname === "/") {
+      return new Response(
+        "<html><head><title>Uni GoldX Credit Card</title></head><body><main>" +
+        ("Uni GoldX: 1% back on all transactions. 5% back on Amazon, Flipkart, Myntra, Zomato, Swiggy, BigBasket, Nykaa and TataCliQ through Uni Store vouchers. 7% back on flights and hotels booked through Uni Store. Zero joining fee and zero annual fee. ").repeat(3) +
+        "</main></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.hostname === "www.uni.cards" && url.pathname === "/campaign/") {
+      return new Response(
+        "<html><head><title>Uni GoldX rewards campaign</title></head><body><main>" +
+        ("GoldX offers up to 8% back on selected merchants, 50% back on PVR and INOX vouchers subject to card spends of INR 10,000 per month, and zero forex fee. ").repeat(3) +
+        "</main></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.hostname === "web.uni.cards") {
+      return new Response(
+        "<html><head><title>Uni GoldX</title></head><body><main>" +
+        ("Uni GoldX card. Rewards are in digital gold, with merchant and travel offer conditions. ").repeat(4) +
+        "</main></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/extract", {
+      method: "POST",
+      headers: { authorization: "Bearer test-admin-token", "content-type": "application/json" },
+      body: JSON.stringify({
+        issuer: "YES Bank",
+        cardName: "UNI Gold X",
+        sourceUrl: "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf"
+      })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async toMarkdown() {
+          return { format: "markdown", data: "Zagg Credit Card annual fee INR 399. Zagg Credit Card waiver INR 300000." };
+        },
+        async run(model, options) {
+          extractionPrompt = options.messages.find(message => message.role === "user")?.content || "";
+          return { response: JSON.stringify(validDraft) };
+        }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.match(extractionPrompt, /Uni GoldX: 1% back on all transactions/i);
+    assert.match(extractionPrompt, /5% back on Amazon/i);
+    assert.match(extractionPrompt, /7% back on flights and hotels/i);
+    assert.match(extractionPrompt, /50% back on PVR and INOX/i);
+    assert.doesNotMatch(extractionPrompt, /Zagg Credit Card annual fee INR 399/i);
+    assert.doesNotMatch(extractionPrompt, /Zagg Credit Card waiver INR 300000/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
