@@ -161,7 +161,7 @@ export function extractOfficialHtml(html, baseUrl, cardName = "") {
   for (const match of safeHtml.matchAll(anchorPattern)) {
     const attrs = match[1] || "";
     const href = attribute(attrs, "href");
-    if (!href || /^(?:javascript|data|mailto|tel):/i.test(href)) continue;
+    if (!href || /^\s*(?:#|javascript:|data:|mailto:|tel:)/i.test(href)) continue;
     let url;
     try {
       url = new URL(href, baseUrl);
@@ -171,6 +171,8 @@ export function extractOfficialHtml(html, baseUrl, cardName = "") {
     url.hash = "";
     const label = textFromMarkup(match[2]);
     const linkTitle = attribute(attrs, "title") || attribute(attrs, "aria-label") || label || url.pathname.split("/").pop() || url.hostname;
+    if (/^(?:skip(?:\s+to)?\s+(?:content|main content|navigation)|back to top|menu|home|main content)$/i.test(String(linkTitle).trim()) ||
+        /^(?:skip(?:\s+to)?\s+(?:content|main content|navigation)|back to top)$/i.test(label.trim())) continue;
     const searchable = String(linkTitle) + " " + label + " " + url.pathname + " " + url.search;
     const isPdf = /\.pdf(?:$|[?#])/i.test(url.href) || /\bpdf\b/i.test(searchable);
     if (!isPdf && !LINK_TERMS.test(searchable)) continue;

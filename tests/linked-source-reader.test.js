@@ -336,3 +336,127 @@ test("uses the supplied product URL's parent catalogue when the product page is 
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("uses a parent issuer catalogue when a search-discovered Amex page is JavaScript-only", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  let extractionPrompt = "";
+  const foundUrl = "https://www.americanexpress.com/in/credit-know-how/credit-card-fees/";
+  const parentUrl = "https://www.americanexpress.com/in/credit-know-how/";
+  const catalogueHtml = '<html><head><title>American Express Card Information</title></head><body><main>' +
+    '<h2>American Express Platinum Card</h2>' +
+    '<p>Annual membership fee is ₹66,000 plus applicable taxes. The Platinum Card is a charge card.</p>' +
+    '<p>Earn 3X Membership Rewards points on eligible overseas spending, subject to current terms and exclusions.</p>' +
+    '<p>Supplementary card benefits and eligibility are detailed in the official cardmember terms.</p>' +
+    '<h2>American Express Gold Card</h2>' +
+    '<p>Different annual membership fee and monthly transaction qualification rules apply to the Gold Card.</p>' +
+    '</main></body></html>';
+  const validDraft = {
+    issuer: "American Express",
+    cardName: "American Express Platinum Card",
+    network: null,
+    rewardCurrency: "Membership Rewards points",
+    annualFee: 66000,
+    joiningFee: 66000,
+    annualFeeWaiver: null,
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [],
+    missingItems: ["Confirm full terms, caps and eligibility before publishing."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+
+    if (url.hostname === "html.duckduckgo.com") {
+      return new Response(
+        '<html><a class="result__a" href="' + foundUrl + '">Cover Card Charges | American Express India</a></html>',
+        { headers: { "content-type": "text/html" } }
+      );
+    }
+    if (url.toString() === foundUrl) {
+      return new Response(
+        '<html><head><title>Cover Card Charges</title></head><body>' +
+        '<a href="#main-content" aria-label="Skip to content">Skip to content</a>' +
+        '<div id="root"></div><script src="/assets/amex-app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === parentUrl) {
+      return new Response(catalogueHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    if (url.toString() === "https://www.americanexpress.com/in/") {
+      return new Response("<html></html>", { headers: { "content-type": "text/html" } });
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        issuer: "American Express",
+        cardName: "American Express Platinum Card"
+      })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async run(_model, request) {
+          extractionPrompt = request.messages?.[1]?.content || "";
+          return { response: JSON.stringify(validDraft) };
+        }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.suppliedSourceUrl, false);
+    assert.equal(body.discovery.selectedSource, parentUrl);
+    assert.ok(fetchedUrls.includes(foundUrl));
+    assert.ok(fetchedUrls.includes(parentUrl));
+    assert.match(extractionPrompt, /Annual membership fee is ₹66,000/);
+    assert.match(extractionPrompt, /Earn 3X Membership Rewards points/);
+    assert.doesNotMatch(extractionPrompt, /American Express Gold Card|Different annual membership fee/);
+    assert.ok(!body.discovery.sourceCandidates.some(item => /Skip to content/i.test(item.title)));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("rejects generic card-type labels instead of mixing different card variants", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  globalThis.fetch = async () => {
+    fetchCount += 1;
+    throw new Error("Source discovery must not run for an ambiguous generic card type.");
+  };
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "American Express", cardName: "charge card" })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: { async run() { return { response: "{}" }; } }
+    });
+    assert.equal(response.status, 400);
+    const body = await response.json();
+    assert.match(body.error, /card type, not a specific product name/i);
+    assert.match(body.nextStep, /exact card product\/variant/i);
+    assert.equal(fetchCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
