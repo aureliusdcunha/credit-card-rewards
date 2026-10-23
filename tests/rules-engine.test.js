@@ -27,10 +27,16 @@ test("reports configured exclusions", () => {
   assert.equal(result.points, 0);
 });
 
-test("does not apply unverified general rules to other named categories", () => {
-  const result = calculateRewards({ card: demoAxis, amount: 1000, category: "utilities", purchaseDate: "2026-10-21" });
+test("uses a configured provisional general rate for a non-excluded category", () => {
+  const result = calculateRewards({ card: demoAxis, amount: 1000, category: "groceries", purchaseDate: "2026-10-21" });
   assert.equal(result.ok, true);
-  assert.equal(result.unavailable, true);
+  assert.equal(result.unavailable, undefined);
+  assert.equal(result.excluded, false);
+  assert.equal(result.points, 20);
+  assert.equal(result.rate, 2);
+  assert.equal(result.perAmount, 100);
+  assert.equal(result.ruleStatus, "demo");
+  assert.match(result.notes.join(" "), /unverified|demonstration|verify/i);
 });
 
 test("rejects a zero or negative purchase amount", () => {
@@ -402,4 +408,15 @@ test("does not apply merchant-specific accelerated rules to generic spending cat
   assert.equal(result.points, 25);
   assert.equal(result.rate, 5);
   assert.ok(result.notes.some(note => /merchant-\/channel-specific accelerated rules.*not applied automatically/i.test(note)));
+});
+
+
+test("uses the available provisional base rate for Axis Horizon groceries unless excluded", () => {
+  const result = calculateRewards({ card: demoAxis, amount: 9800, category: "groceries", purchaseDate: "2026-10-21" });
+  assert.equal(result.ok, true);
+  assert.equal(result.unavailable, undefined);
+  assert.equal(result.excluded, false);
+  assert.equal(result.points, 196);
+  assert.equal(result.rewardUnit, "EDGE Miles");
+  assert.equal(result.ruleStatus, "demo");
 });
