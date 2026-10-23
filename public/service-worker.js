@@ -11,7 +11,7 @@ const PRECACHE_URLS = [
   "/offline.html",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
-  "/icons/icon-512.svg",
+  "/icons/icon-512.png",
   "/css/app.css?v=0.6.13.0",
   "/js/api.js?v=0.6.13.0",
   "/js/layout.js?v=0.6.13.0",
@@ -27,7 +27,7 @@ const PRECACHE_URLS = [
 const STATIC_PATHS = new Set([
   "/", "/index.html", "/cards.html", "/calculator.html", "/compare.html",
   "/sources.html", "/offline.html", "/manifest.webmanifest",
-  "/icons/icon-192.png", "/icons/icon-512.svg",
+  "/icons/icon-192.png", "/icons/icon-512.png",
   "/css/app.css", "/js/api.js", "/js/layout.js", "/js/dashboard.js",
   "/js/source-review-prefill.js", "/js/card-modal.js", "/js/cards.js",
   "/js/calculator.js", "/js/compare.js", "/js/sources.js"
