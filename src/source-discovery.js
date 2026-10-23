@@ -662,8 +662,14 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const domain = issuerDomainFor(issuerValue, cardValue);
   const alternateDomain = domain ? legacyIssuerDomainFor(issuerValue, domain) : null;
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
-  // YES BANK's UNI landing page is client-rendered. Use its product page plus
-  // the current co-brand MITC and issuer Key Fact Statement as a stable source set.
+  // GoldX is a distinct Uni product and may be issued under a co-brand issuer
+  // name; route it to Uni's exact official GoldX pages before generic issuer search.
+  if (/\buni\b/i.test(cardValue) && /gold\s*x|goldx/i.test(cardValue)) {
+    const curated = knownOfficialFallbacks(issuerValue, cardValue);
+    if (curated.length) return curated;
+  }
+  // YES BANK's legacy UNI landing page is client-rendered. Use its product page
+  // plus the current co-brand MITC and issuer Key Fact Statement for that variant.
   if (issuerValue.toLowerCase().includes("yes bank") && /\buni\b/i.test(cardValue) && !/\brupay\b/i.test(cardValue)) {
     const curated = knownOfficialFallbacks(issuerValue, cardValue);
     if (curated.length) return curated;
