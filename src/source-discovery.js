@@ -10,7 +10,9 @@ export const OFFICIAL_DOMAINS = [
   "axisbank.com", "hdfcbank.com", "icicibank.com", "sbicard.com", "sbi.co.in",
   "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
   "hsbc.co.in", "icicibank.com", "americanexpress.com", "amex.co.in", "bobfinancial.com",
-  "federalbank.co.in", "aubank.in", "standardchartered.co.in"
+  "federalbank.co.in", "aubank.in", "standardchartered.co.in",
+  // Official Uni co-brand document CDN used for YES BANK UNI card MITC.
+  "webcdn.uni.cards"
 ];
 
 const ISSUER_DOMAIN_MAP = [
@@ -424,6 +426,34 @@ async function discoverIssuerSiteUrls(domain, cardName) {
 function knownOfficialFallbacks(issuer, cardName) {
   const issuerText = String(issuer || "").toLowerCase();
   const cardText = String(cardName || "").toLowerCase();
+  if (issuerText.includes("yes bank") && /\buni\b/.test(cardText) && !/\brupay\b/.test(cardText)) {
+    return [
+      {
+        url: "https://quickapply.yes.bank.in/savings/assets/files/yesbank_key_fact_statement.pdf",
+        title: "YES BANK UNI Credit Card — official Key Fact Statement",
+        domain: "quickapply.yes.bank.in",
+        score: 180
+      },
+      {
+        url: "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf",
+        title: "YES BANK Credit Card MITC — current co-brand terms including UNI",
+        domain: "webcdn.uni.cards",
+        score: 175
+      },
+      {
+        url: "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card",
+        title: "YES BANK UNI Credit Card — official product page",
+        domain: "www.yes.bank.in",
+        score: 150
+      },
+      {
+        url: "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        title: "YES BANK official credit-card catalogue",
+        domain: "www.yes.bank.in",
+        score: 120
+      }
+    ];
+  }
   if (issuerText.includes("icici") && cardText.includes("sapphiro")) {
     return [
       {
@@ -559,8 +589,19 @@ export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
   const primaryDomain = issuerDomainFor(issuer, cardName);
   const legacyDomain = primaryDomain ? legacyIssuerDomainFor(issuer, primaryDomain) : null;
-  const expectedDomains = [primaryDomain, legacyDomain].filter(Boolean);
   const belongsTo = domain => host === domain || host.endsWith("." + domain);
+
+  // Uni's co-branded YES BANK card MITC is published on the official Uni CDN.
+  // Permit only this exact current document for the UNI Credit Card variant.
+  const isYesBankUni = String(issuer || "").toLowerCase().includes("yes bank") &&
+    /\buni\b/i.test(String(cardName || "")) &&
+    !/\brupay\b/i.test(String(cardName || ""));
+  if (isYesBankUni && host === "webcdn.uni.cards" &&
+      url.pathname === "/nxwave/docs/CC_YesBank_MITC.pdf") {
+    return url;
+  }
+
+  const expectedDomains = [primaryDomain, legacyDomain].filter(Boolean);
 
   if (expectedDomains.length) {
     if (expectedDomains.some(belongsTo)) return url;
@@ -588,6 +629,10 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const domain = issuerDomainFor(issuerValue, cardValue);
   const alternateDomain = domain ? legacyIssuerDomainFor(issuerValue, domain) : null;
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
+  if (issuerValue.toLowerCase().includes("yes bank") && /\buni\b/i.test(cardValue) && !/\brupay\b/i.test(cardValue)) {
+    const curated = knownOfficialFallbacks(issuerValue, cardValue);
+    if (curated.length) return curated;
+  }
   // For known SBI SimplySAVE, the product page and reward-terms PDF are a
   // verified issuer-owned source set. Return them directly rather than spending
   // another 10–20 seconds waiting on search/sitemap providers.
