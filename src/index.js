@@ -313,7 +313,7 @@ async function aiExtract(request, env) {
       try {
         const parsed = new URL(value);
         parsed.hash = "";
-        return parsed.toString().replace(/\\/$/, "");
+        return parsed.toString().replace(/\/$/, "");
       } catch { return String(value || ""); }
     };
     const sourceParts = [{
@@ -324,7 +324,7 @@ async function aiExtract(request, env) {
     const seenUrls = new Set([normalizeUrl(primaryUrl)]);
     try {
       const discovered = await discoverOfficialUrls(body.issuer, body.cardName);
-      const isPdf = item => /\\.pdf(?:[?#]|$)/i.test(String(item.url || "")) || /\\bpdf\\b/i.test(String(item.title || ""));
+      const isPdf = item => /\.pdf(?:[?#]|$)/i.test(String(item.url || "")) || /\bpdf\b/i.test(String(item.title || ""));
       const htmlCandidates = discovered.filter(item => !isPdf(item) && !seenUrls.has(normalizeUrl(item.url))).slice(0, 2);
       for (const candidate of htmlCandidates) {
         try {
@@ -370,8 +370,8 @@ async function aiExtract(request, env) {
     }
     if (sourceParts.length > 1) {
       sourceText = sourceParts.map((source, index) =>
-        `OFFICIAL SOURCE ${index + 1}\\nTitle: ${source.title}\\nURL: ${source.url}\\nDocument text:\\n${source.text}`
-      ).join("\\n\\n").slice(0, MAX_SOURCE_CHARS);
+        `OFFICIAL SOURCE ${index + 1}\nTitle: ${source.title}\nURL: ${source.url}\nDocument text:\n${source.text}`
+      ).join("\n\n").slice(0, MAX_SOURCE_CHARS);
       sourceTitle = sourceParts.map(source => source.title).join(" + ");
     }
   }
