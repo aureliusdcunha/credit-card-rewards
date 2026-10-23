@@ -12,6 +12,7 @@
   const successBox = document.getElementById("source-success");
   const draftPanel = document.getElementById("draft-editor-panel");
   const draftJson = document.getElementById("draft-json");
+  const draftSummary = document.getElementById("draft-summary");
   const draftMeta = document.getElementById("draft-meta");
   const reviewMessage = document.getElementById("review-message");
   const draftList = document.getElementById("draft-list");
@@ -42,6 +43,220 @@
       return value;
     } catch (error) { throw new Error(`Review JSON is invalid: ${error.message}`); }
   }
+  function displayFieldName(key) {
+    const known = {
+      cardName: "Card name", issuer: "Issuer", rewardCurrency: "Reward currency", network: "Network",
+      annualFee: "Annual fee", joiningFee: "Joining fee", annualFeeWaiver: "Fee waiver",
+      effectiveDate: "Effective date", validFrom: "Valid from", validTo: "Valid to",
+      perAmount: "Spend amount", minTransaction: "Minimum transaction", cap: "Cap / limit",
+      overCapCategory: "Rate after cap", merchantCondition: "Eligible merchants",
+      channelCondition: "Payment channel", sourceQuote: "Source evidence", sourceUrl: "Official source URL",
+      calculatorEligible: "Used by calculator", isAccelerated: "Accelerated offer",
+      isBonus: "Bonus component", multiplier: "Multiplier", rounding: "Rounding",
+      missingItems: "Missing information", exclusions: "Exclusions", benefits: "Benefits",
+      rules: "Earning rules", annualFeeWaiverText: "Annual fee waiver", summary: "Summary",
+      notes: "Notes", status: "Status", category: "Category", rate: "Rate", unit: "Reward unit",
+      formula: "Earning formula", eligibility: "Eligibility", conditions: "Conditions",
+      description: "Description", name: "Name", title: "Title", type: "Type", value: "Value",
+      period: "Period", minimum: "Minimum", maximum: "Maximum", amount: "Amount"
+    };
+    if (known[key]) return known[key];
+    return String(key || "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/^./, letter => letter.toUpperCase());
+  }
+
+  function hasDisplayValue(value) {
+    return value !== null && value !== undefined && value !== "" &&
+      !(typeof value === "number" && !Number.isFinite(value));
+  }
+
+  function appendNestedValue(parent, value) {
+    if (Array.isArray(value)) {
+      if (!value.length) return;
+      const ul = document.createElement("ul");
+      ul.className = "draft-bullet-list draft-bullet-sublist";
+      value.forEach(item => {
+        if (!hasDisplayValue(item)) return;
+        const li = document.createElement("li");
+        if (item && typeof item === "object") {
+          const title = item.label || item.name || item.title || item.merchant || item.category || item.type;
+          if (title) {
+            const strong = document.createElement("strong");
+            strong.textContent = String(title);
+            li.append(strong);
+          }
+          appendObjectFields(li, item, ["label", "name", "title", "merchant", "category", "type"]);
+        } else {
+          li.textContent = String(item);
+        }
+        ul.append(li);
+      });
+      if (ul.children.length) parent.append(ul);
+      return;
+    }
+    if (value && typeof value === "object") {
+      appendObjectFields(parent, value);
+      return;
+    }
+    const span = document.createElement("span");
+    span.className = "draft-bullet-value";
+    span.textContent = typeof value === "boolean" ? (value ? "Yes" : "No") : String(value);
+    parent.append(span);
+  }
+
+  function appendObjectFields(parent, object, excluded = []) {
+    if (!object || typeof object !== "object" || Array.isArray(object)) return;
+    const fields = Object.entries(object).filter(([key, value]) =>
+      !excluded.includes(key) && hasDisplayValue(value)
+    );
+    if (!fields.length) return;
+    const ul = document.createElement("ul");
+    ul.className = "draft-bullet-list draft-bullet-sublist";
+    fields.forEach(([key, value]) => {
+      const li = document.createElement("li");
+      const label = document.createElement("strong");
+      label.textContent = displayFieldName(key) + ": ";
+      li.append(label);
+      appendNestedValue(li, value);
+      ul.append(li);
+    });
+    parent.append(ul);
+  }
+
+  function createSummarySection(title) {
+    const section = document.createElement("section");
+    section.className = "draft-summary-section";
+    const heading = document.createElement("h3");
+    heading.textContent = title;
+    section.append(heading);
+    const list = document.createElement("ul");
+    list.className = "draft-bullet-list";
+    section.append(list);
+    draftSummary.append(section);
+    return list;
+  }
+
+  function appendSummaryItem(list, label, value, excluded = []) {
+    if (!hasDisplayValue(value)) return;
+    const li = document.createElement("li");
+    const strong = document.createElement("strong");
+    strong.textContent = label;
+    li.append(strong);
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      appendObjectFields(li, value, excluded);
+    } else {
+      appendNestedValue(li, value);
+    }
+    list.append(li);
+  }
+
+  function renderSimpleArraySection(title, values) {
+    if (!Array.isArray(values) || !values.length) return;
+    const list = createSummarySection(title);
+    values.forEach((item, index) => {
+      if (!hasDisplayValue(item)) return;
+      const li = document.createElement("li");
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const primary = item.label || item.name || item.title || item.merchant || item.category || item.type || title.slice(0, -1) + " " + (index + 1);
+        const strong = document.createElement("strong");
+        strong.textContent = String(primary);
+        li.append(strong);
+        const excluded = ["label", "name", "title", "merchant", "category", "type"];
+        appendObjectFields(li, item, excluded);
+      } else {
+        li.textContent = String(item);
+      }
+      list.append(li);
+    });
+  }
+
+  function renderRuleSection(rules) {
+    if (!Array.isArray(rules) || !rules.length) return;
+    const list = createSummarySection("Earning rules");
+    rules.forEach((rule, index) => {
+      if (!rule || typeof rule !== "object") {
+        const li = document.createElement("li");
+        li.textContent = String(rule);
+        list.append(li);
+        return;
+      }
+      const li = document.createElement("li");
+      const label = rule.label || displayFieldName(rule.category || "Earning rule");
+      const amount = Number(rule.perAmount);
+      const numericRate = rule.rate !== null && rule.rate !== undefined && Number.isFinite(Number(rule.rate));
+      let rateSummary = "";
+      if (numericRate && Number.isFinite(amount) && amount > 0) {
+        rateSummary = " — " + rule.rate + " " + String(rule.unit || rule.rewardCurrency || "rewards") + " per ₹" + amount.toLocaleString("en-IN");
+      } else if (rule.formula) {
+        rateSummary = " — " + String(rule.formula);
+      }
+      const strong = document.createElement("strong");
+      strong.textContent = String(label) + rateSummary;
+      li.append(strong);
+      const fields = [
+        "category", "merchantCondition", "channelCondition", "minTransaction", "cap",
+        "validFrom", "validTo", "isAccelerated", "isBonus", "multiplier",
+        "calculatorEligible", "rounding", "notes", "sourceQuote", "sourceUrl", "eligibility", "conditions"
+      ];
+      appendObjectFields(li, Object.fromEntries(fields.filter(key => hasDisplayValue(rule[key])).map(key => [key, rule[key]])));
+      list.append(li);
+    });
+  }
+
+  function renderDraftSummary(draft) {
+    if (!draftSummary) return;
+    draftSummary.replaceChildren();
+    if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
+      const message = document.createElement("p");
+      message.className = "draft-summary-empty";
+      message.textContent = "This draft cannot be displayed as a structured list. Check the advanced JSON editor.";
+      draftSummary.append(message);
+      return;
+    }
+
+    const cardFields = [
+      "issuer", "cardName", "network", "rewardCurrency", "annualFee", "joiningFee",
+      "annualFeeWaiver", "annualFeeWaiverText", "effectiveDate", "summary"
+    ];
+    const cardDetails = Object.fromEntries(cardFields.filter(key => hasDisplayValue(draft[key])).map(key => [key, draft[key]]));
+    if (Object.keys(cardDetails).length) {
+      const list = createSummarySection("Card and programme details");
+      Object.entries(cardDetails).forEach(([key, value]) => appendSummaryItem(list, displayFieldName(key) + ":", value));
+    }
+
+    renderRuleSection(draft.rules);
+    renderSimpleArraySection("Exclusions", draft.exclusions);
+    renderSimpleArraySection("Benefits", draft.benefits);
+    renderSimpleArraySection("Eligibility and conditions", draft.eligibility);
+    renderSimpleArraySection("Missing information / items to verify", draft.missingItems);
+
+    const handled = new Set([...cardFields, "rules", "exclusions", "benefits", "eligibility", "missingItems"]);
+    const otherFields = Object.fromEntries(Object.entries(draft).filter(([key, value]) => !handled.has(key) && hasDisplayValue(value) && !["rawJson", "id"].includes(key)));
+    if (Object.keys(otherFields).length) {
+      const list = createSummarySection("Other extracted details");
+      Object.entries(otherFields).forEach(([key, value]) => appendSummaryItem(list, displayFieldName(key) + ":", value));
+    }
+
+    if (!draftSummary.children.length) {
+      const empty = document.createElement("p");
+      empty.className = "draft-summary-empty";
+      empty.textContent = "No readable details were extracted. Review the source evidence and advanced JSON.";
+      draftSummary.append(empty);
+    }
+  }
+
+  function showSummaryEditorError() {
+    if (!draftSummary) return;
+    draftSummary.replaceChildren();
+    const message = document.createElement("p");
+    message.className = "draft-summary-error";
+    message.textContent = "The advanced JSON has a syntax error. Fix it below to refresh this bullet-point summary.";
+    draftSummary.append(message);
+  }
+
   function updatePublishButtonLabel() {
     const button = document.getElementById("approve-draft");
     if (!button || !currentDraftId || (button.disabled && button.textContent === "Publishing…")) return;
@@ -67,6 +282,7 @@
     try { parsed = typeof draft.extractedJson === "string" ? JSON.parse(draft.extractedJson) : draft.extractedJson; }
     catch { parsed = draft.extractedJson; }
     draftJson.value = JSON.stringify(parsed, null, 2);
+    renderDraftSummary(parsed);
     draftJson.readOnly = false;
     document.getElementById("approve-draft").disabled = false;
     updatePublishButtonLabel();
@@ -130,7 +346,11 @@
   });
   document.getElementById("refresh-drafts").addEventListener("click", refreshDrafts);
   cardSelect.addEventListener("change", updatePublishButtonLabel);
-  draftJson.addEventListener("input", updatePublishButtonLabel);
+  draftJson.addEventListener("input", () => {
+    updatePublishButtonLabel();
+    try { renderDraftSummary(JSON.parse(draftJson.value)); }
+    catch { showSummaryEditorError(); }
+  });
 
   discoverForm.addEventListener("submit", async event => {
     event.preventDefault();
@@ -154,6 +374,11 @@
     };
     if (!payload.issuer || !payload.cardName) {
       discoverError.textContent = "Enter both the bank and exact card name.";
+      return;
+    }
+    const normalizedCardName = payload.cardName.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+    if (/^(?:(?:credit|charge|debit|prepaid|secured)\s+cards?|cards?)$/i.test(normalizedCardName)) {
+      discoverError.textContent = '"' + payload.cardName + '" is a card type, not a specific product name. Enter the exact card name (for example, American Express Platinum Card or American Express Gold Card). No search or extraction was started.';
       return;
     }
     discoverButton.disabled = true;

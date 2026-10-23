@@ -1167,3 +1167,26 @@ textarea::selection,
 @media(prefers-reduced-motion:reduce) {
   .compare-tab { transition:none; }
 }
+
+
+/* 0.6.10: nested, readable Source Review draft summary */
+.draft-summary { margin: 16px 0 20px; color: #cbd9e2; }
+.draft-summary-section { margin: 16px 0 21px; padding: 13px 15px; background: #121e27; border: 1px solid #293d49; border-radius: 7px; }
+.draft-summary-section h3 { margin: 0 0 10px; color: #70e0bc; font: 600 10px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .6px; text-transform: uppercase; }
+.draft-bullet-list { margin: 0; padding-left: 21px; list-style: disc; }
+.draft-bullet-list > li { margin: 7px 0; padding-left: 3px; color: #c3d3dd; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.draft-bullet-list li::marker { color: #62d7b4; }
+.draft-bullet-list li > strong { color: #e2edf2; font-weight: 700; }
+.draft-bullet-sublist { margin: 5px 0 3px; padding-left: 20px; list-style: circle; }
+.draft-bullet-sublist li { margin: 4px 0; color: #93aab8; font-size: 10.5px; line-height: 1.65; overflow-wrap: anywhere; }
+.draft-bullet-sublist li::marker { color: #557f7c; }
+.draft-bullet-sublist li > strong { color: #a9c1cd; font-weight: 700; }
+.draft-bullet-value { margin-left: 4px; }
+.draft-summary-empty,.draft-summary-error { padding: 13px; color: #8ba3b2; background: #121e27; border: 1px solid #293d49; border-radius: 6px; font-size: 11px; }
+.draft-summary-error { color: #ffabb2; border-color: #684047; }
+.draft-json-details { margin: 14px 0 18px; padding: 11px 13px; background: #101922; border: 1px solid #30414f; border-radius: 7px; }
+.draft-json-details > summary { color: #70e0bc; font: 9px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .25px; cursor: pointer; user-select: none; }
+.draft-json-details > summary:hover { color: #a0f0d8; }
+.draft-json-details[open] > summary { margin-bottom: 10px; }
+.draft-json-details .field-label { margin-top: 9px; }
+.draft-json-details textarea { margin-top: 6px; font: 10px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; }
