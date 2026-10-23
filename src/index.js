@@ -517,7 +517,7 @@ async function autoExtractCardWithTrace(request, env, trace) {
   const maxSources = 4;
   const isPdfCandidate = candidate => /\.pdf(?:[?#]|$)/i.test(String(candidate.url || "")) ||
     /\bpdf\b/i.test(String(candidate.title || ""));
-  const htmlCandidates = candidates.filter(candidate => !isPdfCandidate(candidate)).slice(0, 2);
+  const htmlCandidates = candidates.filter(candidate => !isPdfCandidate(candidate)).slice(0, 4);
   const pdfCandidates = candidates.filter(isPdfCandidate);
   if (isSbiSimplySave) {
     pdfCandidates.sort((a, b) => {
