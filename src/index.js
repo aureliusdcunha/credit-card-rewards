@@ -460,6 +460,12 @@ async function autoExtractCardWithTrace(request, env, trace) {
   if (issuer.length < 2 || cardName.length < 2) {
     return json({ error: "Enter both the bank/issuer and specific card name or variant." }, 400);
   }
+  if (/^(?:(?:credit|charge|debit|prepaid|secured)\s+cards?|cards?)$/i.test(cardName)) {
+    return json({
+      error: '"' + cardName + '" is a card type, not a specific product name.',
+      nextStep: "Enter the exact card product/variant before extraction. Different cards of the same type can have different fees, rewards and eligibility, so a generic type must not be combined into one card record."
+    }, 400);
+  }
 
   let candidates;
   const suppliedSourceUrl = String(body.sourceUrl || body.officialUrl || "").trim();
@@ -591,11 +597,11 @@ async function autoExtractCardWithTrace(request, env, trace) {
   }
   trace.timings.sourceReadMs = Date.now() - sourceReadStartedAt;
 
-  // A supplied product URL is a preferred starting point, not a single-source dead end.
-  // If its server-rendered HTML and linked terms did not yield readable text, try
-  // relevant same-issuer links first, then fall back to normal official-source search.
+  // A supplied URL or a search-discovered page is only a starting point. If all
+  // initial candidates are unreadable, try related official links and walk up to
+  // three path levels on the same validated issuer host to find a readable catalogue.
   let fallbackRelatedCandidates = [];
-  if (!selectedSources.length && suppliedSourceUrl) {
+  if (!selectedSources.length) {
     const relatedCandidates = htmlOutcomes.flatMap(outcome =>
       (outcome.relatedUrls || []).map(item => ({
         url: item.url,
@@ -606,31 +612,43 @@ async function autoExtractCardWithTrace(request, env, trace) {
       }))
     );
 
-    // Card product pages are often JavaScript-only, while their parent catalogue
-    // page contains the fees and benefits in server-rendered HTML. Walk up at
-    // most three path levels on the same validated issuer host before broad search.
-    try {
-      const supplied = validateIssuerOfficialUrl(suppliedSourceUrl, issuer, cardName);
-      const segments = supplied.pathname.split("/").filter(Boolean);
-      const minimumDepth = Math.max(1, segments.length - 3);
-      for (let keep = segments.length - 1; keep >= minimumDepth; keep--) {
-        const parent = new URL(supplied.toString());
-        parent.pathname = "/" + segments.slice(0, keep).join("/") + "/";
-        parent.search = "";
-        parent.hash = "";
-        const checkedParent = validateIssuerOfficialUrl(parent.toString(), issuer, cardName);
-        if (checkedParent.toString() === supplied.toString()) continue;
-        relatedCandidates.push({
-          url: checkedParent.toString(),
-          title: "Official issuer catalogue page",
-          domain: checkedParent.hostname,
-          score: 450 - (segments.length - keep),
-          relatedToSuppliedUrl: true,
-          parentPage: true
-        });
+    // Derive parent catalogue candidates from the supplied URL when present,
+    // otherwise from each search-discovered HTML page that could not be read.
+    // This generalizes the recovery path to newly added cards from every issuer.
+    const seedUrls = suppliedSourceUrl
+      ? [suppliedSourceUrl]
+      : htmlOutcomes
+          .filter(outcome => outcome.skipped || outcome.error)
+          .map(outcome => outcome.candidate && outcome.candidate.url)
+          .filter(Boolean);
+    const processedSeeds = new Set();
+    for (const seedUrl of seedUrls) {
+      try {
+        const seed = validateIssuerOfficialUrl(seedUrl, issuer, cardName);
+        const canonicalSeed = seed.toString();
+        if (processedSeeds.has(canonicalSeed)) continue;
+        processedSeeds.add(canonicalSeed);
+        const segments = seed.pathname.split("/").filter(Boolean);
+        const minimumDepth = Math.max(1, segments.length - 3);
+        for (let keep = segments.length - 1; keep >= minimumDepth; keep--) {
+          const parent = new URL(seed.toString());
+          parent.pathname = "/" + segments.slice(0, keep).join("/") + "/";
+          parent.search = "";
+          parent.hash = "";
+          const checkedParent = validateIssuerOfficialUrl(parent.toString(), issuer, cardName);
+          if (checkedParent.toString() === canonicalSeed) continue;
+          relatedCandidates.push({
+            url: checkedParent.toString(),
+            title: "Official issuer catalogue page",
+            domain: checkedParent.hostname,
+            score: 450 - (segments.length - keep),
+            relatedToSuppliedUrl: Boolean(suppliedSourceUrl),
+            parentPage: true
+          });
+        }
+      } catch (error) {
+        sourceErrors.push("Could not derive an official issuer catalogue page: " + String(error?.message || error).slice(0, 160));
       }
-    } catch (error) {
-      sourceErrors.push("Could not derive an official issuer catalogue page: " + String(error?.message || error).slice(0, 160));
     }
 
     const seenCandidates = new Set(candidates.map(candidate => candidate.url));
