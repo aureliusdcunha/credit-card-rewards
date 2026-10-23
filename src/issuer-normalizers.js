@@ -748,6 +748,7 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
   );
   const generated = [];
   const generatedQuotes = new Set();
+  const malformedExistingRules = new Set();
   let sawUnquantifiedAccelerator = false;
 
   const normalizeMerchantText = value => String(value || "")
@@ -838,6 +839,27 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
           const denominator = Number(baseRule.perAmount);
           if (!Number.isFinite(amountRate) || amountRate <= 0 || denominator <= 0) continue;
 
+          const existingAccelerated = data.rules.find(rule => {
+            const quote = String(rule.sourceQuote || "").replace(/\s+/g, " ").trim();
+            return rule.category !== "general" && quote &&
+              /\b\d+(?:\.\d+)?\s*[x×]/i.test(quote) &&
+              (sentenceKey.includes(quote) || quote.includes(sentenceKey));
+          });
+          if (existingAccelerated &&
+              Number(existingAccelerated.rate) === amountRate &&
+              Number(existingAccelerated.perAmount) === denominator) {
+            existingAccelerated.label = existingAccelerated.label || ((isBonus ? String(multiplier) + "X accelerated bonus" : String(multiplier) + "X accelerated total") + (merchantCondition ? " — " + merchantCondition : ""));
+            existingAccelerated.merchantCondition = existingAccelerated.merchantCondition || merchantCondition || null;
+            existingAccelerated.channelCondition = existingAccelerated.channelCondition || null;
+            existingAccelerated.isAccelerated = true;
+            existingAccelerated.isBonus = isBonus;
+            existingAccelerated.multiplier = multiplier;
+            existingAccelerated.calculatorEligible = false;
+            existingAccelerated.notes = [existingAccelerated.notes, "This merchant/channel-specific rule is kept separate and excluded from generic calculator estimates until the exact condition can be matched."].filter(Boolean).join(" ");
+            continue;
+          }
+          if (existingAccelerated) malformedExistingRules.add(existingAccelerated);
+
           const sectionHasPointCap = /(?:capped|cap|maximum|limit)[^.]{0,90}\b(?:reward\s*)?points?\b/i.test(section.text);
           const pointCapMatch = section.text.match(/(?:capped\s+at|cap(?:ped)?\s+(?:of|at)|maximum\s+(?:cap\s+)?of)\s*(?:₹|rs\.?\s*)?([\d,]+)\s*(?:rp|reward\s+points?|points?)\s*(?:per|\/|a)\s*(?:calendar\s+)?month/i) ||
             section.text.match(/([\d,]+)\s*(?:rp|reward\s+points?)\s*(?:per|\/|a)\s*(?:calendar\s+)?month[^.\n]{0,80}\b(?:cap|capped|maximum)\b/i);
@@ -899,6 +921,7 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
     // Remove an incomplete pseudo-rule for the same multiplier clause, but keep
     // ordinary rules and explicitly quantified rules untouched.
     data.rules = data.rules.filter(rule => {
+      if (malformedExistingRules.has(rule)) return false;
       const quote = String(rule.sourceQuote || "").replace(/\s+/g, " ").trim();
       return !generatedQuotes.has(quote) ||
         (rule.isAccelerated === true && rule.calculatorEligible === false);
