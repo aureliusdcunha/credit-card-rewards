@@ -338,7 +338,7 @@ async function aiExtract(request, env) {
       for (const item of [...(Array.isArray(intake.relatedUrls) ? intake.relatedUrls : []), ...discovered]) {
         if (!item?.url) continue;
         try {
-          const checkedUrl = validateIssuerOfficialUrl(item.url, body.issuer);
+          const checkedUrl = validateIssuerOfficialUrl(item.url, body.issuer, body.cardName);
           const key = normalizeUrl(checkedUrl.toString());
           const existing = candidateMap.get(key);
           if (!existing || Number(item.score || 0) > Number(existing.score || 0)) {
