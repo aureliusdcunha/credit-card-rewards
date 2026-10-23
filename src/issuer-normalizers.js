@@ -784,14 +784,14 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
           if (!Number.isFinite(multiplier) || multiplier <= 1) continue;
 
           const merchantMatches = [
-            ...sentence.matchAll(/(?:select|eligible|participating)\s+merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi),
-            ...sentence.matchAll(/(?:at|on)\s+(?:the\s+)?merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi)
+            ...sentence.matchAll(/(?:select|selected|eligible|participating)\s+merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi),
+            ...sentence.matchAll(/(?:at|on)\s+(?:(?:the|select|selected|eligible|participating)\s+)?merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi)
           ].sort((a, b) => (a.index || 0) - (b.index || 0));
           const merchantMatch = merchantMatches[merchantMatches.length - 1] || null;
           let merchantCondition = normalizeMerchantText(merchantMatch?.[1] || "");
           if (/^(?:and more|etc|etcetera)$/i.test(merchantCondition)) merchantCondition = "";
           const hasNamedCondition = Boolean(merchantCondition) ||
-            /\b(?:dining|grocery|groceries|departmental stores?|movies|travel|flights?|hotels?|fuel|insurance|utility|utilities|bill pay|rent|wallet|school fees|online|offline|e-?com|pos|smartbuy|transactions?)\b/i.test(sentence);
+            /\b(?:merchants?|brands?|dining|grocery|groceries|departmental stores?|movies|travel|flights?|hotels?|fuel|insurance|utility|utilities|bill pay|rent|wallet|school fees|online|offline|e-?com|pos|smartbuy|transactions?)\b/i.test(sentence);
           if (!hasNamedCondition) continue;
           if (!baseRule) {
             sawUnquantifiedAccelerator = true;
@@ -812,7 +812,7 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
           const sectionHasPointCap = /(?:capped|cap|maximum|limit)[^.]{0,90}\b(?:reward\s*)?points?\b/i.test(section.text);
           const pointCapMatch = section.text.match(/(?:capped\s+at|cap(?:ped)?\s+(?:of|at)|maximum\s+(?:cap\s+)?of)\s*(?:₹|rs\.?\s*)?([\d,]+)\s*(?:rp|reward\s+points?|points?)\s*(?:per|\/|a)\s*(?:calendar\s+)?month/i) ||
             section.text.match(/([\d,]+)\s*(?:rp|reward\s+points?)\s*(?:per|\/|a)\s*(?:calendar\s+)?month[^.\n]{0,80}\b(?:cap|capped|maximum)\b/i);
-          const minimumMatch = section.text.match(/(?:minimum\s+transaction(?:\s+value)?|minimum\s+purchase)(?:\s+to\s+be\s+eligible(?:\s+for\s+the\s+offer)?)?\s*(?:is|of|:)?\s*(?:₹|rs\.?\s*|inr\s*)?([\d,]+(?:\.\d+)?)/i);
+          const minimumMatch = section.text.match(/(?:minimum\s+transaction(?:\s+value)?|minimum\s+purchase)[^\.\n]{0,100}?(?:₹|rs\.?\s*|inr\s*)?([\d,]+(?:\.\d+)?)/i);
           const capValue = pointCapMatch ? Number(String(pointCapMatch[1]).replace(/,/g, "")) : null;
           const minTransaction = minimumMatch ? Number(String(minimumMatch[1]).replace(/,/g, "")) : null;
           const cap = sectionHasPointCap && Number.isFinite(capValue) && capValue >= 0
