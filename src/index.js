@@ -372,7 +372,6 @@ async function aiExtract(request, env) {
       sourceText = sourceParts.map((source, index) =>
         `OFFICIAL SOURCE ${index + 1}\nTitle: ${source.title}\nURL: ${source.url}\nDocument text:\n${prioritizeOfficialSourceText(source.text, index === 0 ? 18000 : 12000)}`
       ).join("\n\n").slice(0, MAX_SOURCE_CHARS);
-      sourceTitle = sourceParts.map(source => source.title).join(" + ");
     }
   }
 
