@@ -595,6 +595,12 @@ export async function discoverOfficialUrls(issuer, cardName) {
     const curated = knownOfficialFallbacks(issuerValue, cardValue);
     if (curated.length) return curated;
   }
+  // Use the known official Regalia Gold product, fee and reward terms pages as a
+  // stable source bundle. Search can rank long marketing pages ahead of Fees & Charges.
+  if (/hdfc/i.test(issuerValue) && /regalia/i.test(cardValue) && /gold/i.test(cardValue)) {
+    const curated = knownOfficialFallbacks(issuerValue, cardValue);
+    if (curated.length) return curated;
+  }
   // Use the known official product, features, fee and terms pages as a stable
   // evidence bundle for Regalia Gold. Search can otherwise rank long marketing
   // pages ahead of the dedicated Fees & Charges page.
