@@ -727,3 +727,39 @@ test("parses the current Source Review Document text bundle format for fees, net
   assert.equal(draft.missingItems.includes("Payment network specification"), false);
   assert.equal(draft.missingItems.includes("Detailed list of MCC code exclusions"), false);
 });
+
+
+test("recovers base and category reward rates from issuer-rendered numeric reward tables", () => {
+  const sourceUrl = "https://www.icici.bank.in/personal-banking/cards/credit-card/sapphiro-card";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "Title: ICICI Bank Sapphiro Credit Card",
+    "URL: " + sourceUrl,
+    "Document text:",
+    "Earn Points on every ₹100 spend",
+    "4 On International Spend",
+    "2 On Domestic Spend",
+    "1 On Utility and Insurance Spend"
+  ].join("\n");
+  const draft = {
+    issuer: "ICICI Bank",
+    cardName: "Sapphiro Credit Card",
+    rewardCurrency: "Reward Points",
+    rules: [],
+    benefits: [],
+    missingItems: ["Base reward point earning rate for general spend categories without a specific promotion"],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, { issuer: draft.issuer, cardName: draft.cardName, sourceText, sourceUrl });
+
+  const general = draft.rules.find(rule => rule.category === "general");
+  const international = draft.rules.find(rule => rule.category === "international");
+  const utilities = draft.rules.find(rule => rule.category === "utilities");
+  const insurance = draft.rules.find(rule => rule.category === "insurance");
+  assert.deepEqual([general?.rate, general?.perAmount], [2, 100]);
+  assert.deepEqual([international?.rate, international?.perAmount], [4, 100]);
+  assert.deepEqual([utilities?.rate, utilities?.perAmount], [1, 100]);
+  assert.deepEqual([insurance?.rate, insurance?.perAmount], [1, 100]);
+  assert.equal(draft.missingItems.some(item => /base reward point earning rate/i.test(item)), false);
+});
