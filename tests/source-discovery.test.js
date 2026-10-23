@@ -529,13 +529,13 @@ test("GoldX source review rejects legacy UNI MITC evidence and reads GoldX rewar
       body: JSON.stringify({
         issuer: "YES Bank",
         cardName: "UNI Gold X",
-        sourceUrl: "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf"
+        sourceUrl: "https://www.uni.cards/"
       })
     }), {
       ADMIN_TOKEN: "test-admin-token",
       AI: {
         async toMarkdown() {
-          return { format: "markdown", data: "Zagg Credit Card annual fee INR 399. Zagg Credit Card waiver INR 300000." };
+          throw new Error("GoldX source review must not transcribe the legacy YES BANK UNI MITC PDF.");
         },
         async run(model, options) {
           extractionPrompt = options.messages.find(message => message.role === "user")?.content || "";
