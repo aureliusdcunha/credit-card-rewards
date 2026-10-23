@@ -690,3 +690,40 @@ test("generic accelerated extraction does not invent rates for up-to multipliers
   assert.equal(draft.rules.length, 1);
   assert.match(draft.missingItems.join(" "), /accelerated\/multiplier reward offer/i);
 });
+
+
+test("parses the current Source Review Document text bundle format for fees, network variants and MCC exclusions", () => {
+  const sourceUrl = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card/fees-and-charges";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "Title: HDFC Bank Regalia Gold fees and rewards terms",
+    "URL: " + sourceUrl,
+    "Document text:",
+    "Joining Fee: ₹2,500 plus applicable taxes.",
+    "Annual Fee: ₹2,500 plus applicable taxes.",
+    "Payment network: Visa / Mastercard (variant-dependent).",
+    "MCC 4829 and MCC 6012 are excluded from reward points and do not earn rewards."
+  ].join("\\n");
+  const draft = {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    annualFee: null,
+    joiningFee: null,
+    network: null,
+    benefits: [],
+    missingItems: ["Exact numerical joining fee amount", "Exact numerical annual fee amount", "Payment network specification", "Detailed list of MCC code exclusions"],
+    rules: [],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, { issuer: draft.issuer, cardName: draft.cardName, sourceText, sourceUrl });
+
+  assert.equal(draft.joiningFee, 2500);
+  assert.equal(draft.annualFee, 2500);
+  assert.equal(draft.network, "Visa / Mastercard (variant-dependent)");
+  assert.ok(draft.benefits.some(item => item.name === "MCC-based reward exclusions"));
+  assert.equal(draft.missingItems.includes("Exact numerical joining fee amount"), false);
+  assert.equal(draft.missingItems.includes("Exact numerical annual fee amount"), false);
+  assert.equal(draft.missingItems.includes("Payment network specification"), false);
+  assert.equal(draft.missingItems.includes("Detailed list of MCC code exclusions"), false);
+});
