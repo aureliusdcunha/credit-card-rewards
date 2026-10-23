@@ -1,5 +1,13 @@
 # Credit Card Rewards Intelligence (Cloudflare)
 
+## Release 0.6.22 — 23 October 2026
+
+- Fixes Source Review parsing for assembled official-source bundles in both legacy `SOURCE TEXT START/END` and current `Document text:` formats, retaining each official URL for normalization.
+- Expands source review to prioritize fee/reward/terms pages and read up to two official terms PDFs even when product HTML pages are readable, improving recovery of MCC exclusions, caps, and accelerated reward conditions.
+- Adds generic source-backed MCC-exclusion evidence and a regression test covering joining/annual fees, network variants, and MCC codes.
+
+## Release 0.6.21 — 23 October 2026
+
 ## Release 0.6.21 — 23 October 2026
 
 - Fixes GoldX source discovery when the card variant field contains only `GoldX` under YES BANK; the app now selects official Uni GoldX product, campaign and app-listing sources without falling back to legacy UNI MITC/KFS documents.
