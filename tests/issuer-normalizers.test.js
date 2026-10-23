@@ -593,7 +593,7 @@ test("creates a separate Regalia Gold selected-merchant bonus rule from source e
   const accelerated = draft.rules.find(rule => rule.isAccelerated);
   assert.equal(base.rate, 5);
   assert.equal(base.perAmount, 200);
-  assert.match(accelerated.label, /5X accelerated bonus/);
+  assert.match(accelerated.label, /5X total offer \(4X bonus component\)/);
   assert.match(accelerated.merchantCondition, /Myntra.*Nykaa.*Reliance Digital.*Marks/i);
   assert.equal(accelerated.category, "other");
   assert.equal(accelerated.rate, 20);
