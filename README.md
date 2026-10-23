@@ -2,6 +2,13 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.11 — 23 October 2026
+
+- Preserves high-value facts from long issuer pages before shortening source excerpts. Fee schedules, joining/renewal fees, spend-based waivers, reward rates, multiplier offers, caps, exclusions and eligibility clauses appearing deep in page content are now prioritized for all card issuers.
+- Uses a stable official source bundle for HDFC Regalia Gold that includes its dedicated Fees & Charges page and current reward terms, rather than relying on search result order.
+- Adds regression tests proving that the official "Joining/Renewal Membership Fee of Rs. 2500 + Applicable Taxes" remains available to the generic fee normalizer even when it appears near the end of a very long page.
+- Updates package/Worker release metadata, navigation version pill, all page footers, asset cache keys, source discovery user-agent and documentation to **0.6.11 / build 20261023.09**.
+
 ## Release 0.6.10 — 23 October 2026
 
 - Shows extracted card details as a readable nested bullet list by default, with sections for card/programme details, earning rules, exclusions, benefits, eligibility and missing information.
