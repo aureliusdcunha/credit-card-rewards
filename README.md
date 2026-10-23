@@ -2,6 +2,11 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.9 — 23 October 2026
+
+- Clarifies merchant-accelerator labels so a 5X total offer that includes the base rate is shown as **5X total offer (4X bonus component)**, not a 5X bonus. Explicitly additional X-times offers retain their source-supported bonus multiplier.
+- Updates package/Worker release metadata, the visible navigation version pill, all page footers, asset cache keys, user-agent and version tests to **0.6.9 / build 20261023.07**.
+
 ## Release 0.6.8 — 23 October 2026
 
 - Generalizes earning-rule extraction for every issuer/card: base rates, merchant/brand accelerators, transaction types, channels, minimum spend, caps and validity are represented as separate sourced rules when supported.
