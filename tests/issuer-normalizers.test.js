@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts, normalizeSbiSimplySaveExtraction } from "../src/issuer-normalizers.js";
+import { normalizeHdfcRegaliaExtraction, normalizeCommonCardFacts, normalizeSbiSimplySaveExtraction, normalizeGenericAcceleratedEarningRules } from "../src/issuer-normalizers.js";
 
 const termsUrl = "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-travel-edge-tnc.pdf";
 const cardUrl = "https://www.hdfc.bank.in/credit-cards/regalia-gold-credit-card";
@@ -550,4 +550,142 @@ test("official combined fee wording overrides model-produced zero values", () =>
   });
   assert.equal(draft.joiningFee, 2500);
   assert.equal(draft.annualFee, 2500);
+});
+
+
+test("creates a separate Regalia Gold selected-merchant bonus rule from source evidence", () => {
+  const sourceText = combinedSources();
+  const draft = {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    rewardCurrency: "Reward Points",
+    effectiveDate: null,
+    rules: [{
+      category: "general",
+      rate: 5,
+      perAmount: 200,
+      unit: "Reward Points",
+      rounding: "down",
+      sourceQuote: "5 Reward Points for every ₹200 spends across eligible categories.",
+      sourceUrl: termsUrl,
+      notes: "Official base reward rate."
+    }],
+    benefits: [],
+    missingItems: []
+  };
+
+  normalizeHdfcRegaliaExtraction(draft, {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    sourceText,
+    sourceUrl: cardUrl
+  });
+  normalizeGenericAcceleratedEarningRules(draft, {
+    issuer: "HDFC Bank",
+    cardName: "Regalia Gold",
+    sourceText,
+    sourceUrl: cardUrl
+  });
+
+  assert.equal(draft.rules.length, 2);
+  const base = draft.rules.find(rule => rule.category === "general");
+  const accelerated = draft.rules.find(rule => rule.isAccelerated);
+  assert.equal(base.rate, 5);
+  assert.equal(base.perAmount, 200);
+  assert.match(accelerated.label, /5X accelerated bonus/);
+  assert.match(accelerated.merchantCondition, /Myntra.*Nykaa.*Reliance Digital.*Marks/i);
+  assert.equal(accelerated.category, "other");
+  assert.equal(accelerated.rate, 20);
+  assert.equal(accelerated.perAmount, 200);
+  assert.equal(accelerated.isBonus, true);
+  assert.equal(accelerated.multiplier, 5);
+  assert.equal(accelerated.calculatorEligible, false);
+  assert.equal(accelerated.minTransaction, 150);
+  assert.deepEqual(accelerated.cap, {
+    type: "points",
+    value: 5000,
+    period: "calendar_month",
+    overCapCategory: "general"
+  });
+  assert.match(accelerated.channelCondition, /e-com and POS/i);
+  assert.equal(accelerated.sourceUrl, termsUrl);
+  assert.match(accelerated.sourceQuote, /Myntra, Nykaa, Reliance Digital, Marks & Spencers/);
+  assert.doesNotMatch(draft.missingItems.join(" "), /5X selected-merchant offer was retained as a benefit/i);
+});
+
+test("generic accelerated extraction works for another issuer without HDFC-specific card names", () => {
+  const sourceUrl = "https://www.example.bank.in/cards/retail-rewards";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Retail Rewards Card Terms",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Base earnings: 1 Reward Point for every ₹100 spent on eligible purchases.",
+    "4X Reward Points apply at selected merchants — Acme Store, Beta Shop.",
+    "Accelerated Reward Points are capped at 2,000 points per month. Base reward points continue as is without capping.",
+    "Minimum transaction value to qualify for the offer is ₹100.",
+    "The 4X offer can be accumulated for online and POS transactions.",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = {
+    issuer: "Example Bank",
+    cardName: "Retail Rewards Card",
+    rewardCurrency: "Reward Points",
+    rules: [{
+      category: "general",
+      rate: 1,
+      perAmount: 100,
+      unit: "Reward Points",
+      sourceQuote: "Base earnings: 1 Reward Point for every ₹100 spent on eligible purchases.",
+      sourceUrl,
+      rounding: "down"
+    }],
+    benefits: [],
+    missingItems: []
+  };
+
+  normalizeGenericAcceleratedEarningRules(draft, {
+    issuer: "Example Bank",
+    cardName: "Retail Rewards Card",
+    sourceText,
+    sourceUrl
+  });
+
+  const accelerated = draft.rules.find(rule => rule.isAccelerated);
+  assert.ok(accelerated);
+  assert.equal(accelerated.rate, 3);
+  assert.equal(accelerated.perAmount, 100);
+  assert.equal(accelerated.isBonus, true);
+  assert.equal(accelerated.multiplier, 4);
+  assert.equal(accelerated.calculatorEligible, false);
+  assert.match(accelerated.merchantCondition, /Acme Store, Beta Shop/);
+  assert.equal(accelerated.cap.value, 2000);
+  assert.equal(accelerated.minTransaction, 100);
+  assert.match(accelerated.channelCondition, /online and POS transactions/i);
+  assert.equal(accelerated.sourceUrl, sourceUrl);
+});
+
+test("generic accelerated extraction does not invent rates for up-to multipliers", () => {
+  const sourceUrl = "https://www.example.bank.in/cards/travel";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Travel Rewards",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Base rewards are 2 points per ₹100 spent on eligible purchases.",
+    "Earn up to 10X reward points on travel bookings, depending on the offer and booking channel.",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = {
+    issuer: "Example Bank",
+    cardName: "Travel Rewards",
+    rewardCurrency: "Points",
+    rules: [{ category: "general", rate: 2, perAmount: 100, unit: "Points", sourceQuote: "2 points per ₹100 spent", sourceUrl }],
+    benefits: [],
+    missingItems: []
+  };
+  normalizeGenericAcceleratedEarningRules(draft, { sourceText, sourceUrl });
+
+  assert.equal(draft.rules.length, 1);
+  assert.match(draft.missingItems.join(" "), /accelerated\/multiplier reward offer/i);
 });
