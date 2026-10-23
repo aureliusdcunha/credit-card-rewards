@@ -334,3 +334,83 @@ test("allows only the official YES BANK UNI MITC PDF as an issuer-specific Uni C
     /domain does not match YES Bank/
   );
 });
+
+
+test("manual MITC source review supplements the PDF with official card-page rewards", async () => {
+  const originalFetch = globalThis.fetch;
+  let extractionPrompt = "";
+  const validDraft = {
+    issuer: "YES Bank",
+    cardName: "UNI Credit Card",
+    network: null,
+    rewardCurrency: "Uni Coins",
+    annualFee: 499,
+    joiningFee: 0,
+    annualFeeWaiver: null,
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [],
+    missingItems: ["Verify exact Uni Coin redemption value and cashback calculation."],
+    summary: "Draft awaiting review."
+  };
+  const productUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card";
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    if (url.hostname === "webcdn.uni.cards" && url.pathname === "/nxwave/docs/CC_YesBank_MITC.pdf") {
+      return new Response(new Uint8Array([37, 80, 68, 70]), {
+        headers: { "content-type": "application/pdf" }
+      });
+    }
+    if (url.toString().replace(/\/$/, "") === productUrl) {
+      return new Response(
+        "<html><head><title>YES BANK UNI Credit Card</title></head><body><main>" +
+        ("UNI Credit Card: 1% cash back in Uni Coins on all transactions. Verify redemption terms, eligible transactions and exclusions. ").repeat(5) +
+        "</main></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.hostname === "www.yes.bank.in" && url.pathname === "/personal-banking/yes-individual/cards/credit-cards") {
+      return new Response(
+        "<html><head><title>YES BANK Credit Cards</title></head><body><main>" +
+        ("Official YES BANK credit-card catalogue with card fees, benefits and eligibility terms. ").repeat(5) +
+        "</main></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        issuer: "YES Bank",
+        cardName: "UNI Credit Card",
+        sourceUrl: "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf"
+      })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async toMarkdown() {
+          return { format: "markdown", data: "YES BANK UNI Credit Card. Joining fee NIL. Annual fee INR 499. " + "Official MITC terms. ".repeat(10) };
+        },
+        async run(model, options) {
+          extractionPrompt = options.messages.find(message => message.role === "user")?.content || "";
+          return { response: JSON.stringify(validDraft) };
+        }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.ok(extractionPrompt.includes(productUrl), "the extraction prompt must label the supplementary official product URL");
+    assert.match(extractionPrompt, /1% cash back in Uni Coins on all transactions/i);
+    assert.match(extractionPrompt, /CC_YesBank_MITC\.pdf/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
