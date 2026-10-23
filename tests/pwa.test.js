@@ -33,8 +33,14 @@ test("all app pages reference a valid installable Android PWA manifest and icons
   assert.equal(manifest.background_color, "#0d141b");
   assert.equal(manifest.prefer_related_applications, false);
   assert.ok(manifest.icons.some(icon => icon.sizes === "192x192" && icon.type === "image/png"));
-  assert.ok(manifest.icons.some(icon => icon.sizes === "512x512" && icon.type === "image/png"));
-  assert.ok(manifest.icons.some(icon => icon.purpose === "maskable" && icon.sizes === "512x512"));
+  assert.ok(manifest.icons.some(icon => icon.sizes === "512x512" && icon.type === "image/svg+xml"));
+  assert.ok(manifest.icons.some(icon => icon.purpose === "maskable" && icon.sizes === "512x512" && icon.src === "/icons/icon-512.svg"));
+  const pngIcon = await readFile(new URL("../public/icons/icon-192.png", import.meta.url));
+  assert.deepEqual([...pngIcon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], "192px fallback must be a real PNG");
+  assert.equal(pngIcon.readUInt32BE(16), 192);
+  assert.equal(pngIcon.readUInt32BE(20), 192);
+  const svgIcon = await read("../public/icons/icon-512.svg");
+  assert.match(svgIcon, /<svg[^>]*width="512"[^>]*height="512"/);
   assert.ok(manifest.shortcuts.some(shortcut => shortcut.url === "/cards.html"));
   assert.ok(manifest.shortcuts.some(shortcut => shortcut.url === "/calculator.html"));
 });
@@ -44,7 +50,7 @@ test("the service worker precaches the app shell and never intercepts or caches 
   for (const path of [
     '"/index.html"', '"/cards.html"', '"/calculator.html"', '"/compare.html"',
     '"/sources.html"', '"/offline.html"', '"/manifest.webmanifest"',
-    '"/icons/icon-192.png"', '"/icons/icon-512.png"'
+    '"/icons/icon-192.png"', '"/icons/icon-512.svg"'
   ]) assert.ok(worker.includes(path), "precache list should include " + path);
 
   assert.match(worker, /const CACHE_VERSION = "0\.6\.13"/);
