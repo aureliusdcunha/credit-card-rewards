@@ -10,7 +10,9 @@ export const OFFICIAL_DOMAINS = [
   "axisbank.com", "hdfcbank.com", "icicibank.com", "sbicard.com", "sbi.co.in",
   "kotak.com", "idfcfirstbank.com", "indusind.com", "rblbank.com", "yesbank.in",
   "hsbc.co.in", "icicibank.com", "americanexpress.com", "amex.co.in", "bobfinancial.com",
-  "federalbank.co.in", "aubank.in", "standardchartered.co.in"
+  "federalbank.co.in", "aubank.in", "standardchartered.co.in",
+  // Official Uni CDN hosting the current co-branded YES BANK Credit Card MITC.
+  "webcdn.uni.cards"
 ];
 
 const ISSUER_DOMAIN_MAP = [
@@ -325,7 +327,7 @@ async function fetchIssuerDiscoveryPage(rawUrl) {
     const response = await fetch(rawUrl, {
       headers: {
         "accept": "text/html,application/xhtml+xml,application/xml,text/xml,text/plain;q=0.9,*/*;q=0.8",
-        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.11)"
+        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.12)"
       },
       redirect: "follow",
       ...discoveryTimeoutOptions()
@@ -424,6 +426,34 @@ async function discoverIssuerSiteUrls(domain, cardName) {
 function knownOfficialFallbacks(issuer, cardName) {
   const issuerText = String(issuer || "").toLowerCase();
   const cardText = String(cardName || "").toLowerCase();
+  if (issuerText.includes("yes bank") && /\buni\b/.test(cardText) && !/\brupay\b/.test(cardText)) {
+    return [
+      {
+        url: "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card",
+        title: "YES BANK UNI Credit Card — official product page",
+        domain: "www.yes.bank.in",
+        score: 200
+      },
+      {
+        url: "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards",
+        title: "YES BANK official credit-card catalogue",
+        domain: "www.yes.bank.in",
+        score: 150
+      },
+      {
+        url: "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf",
+        title: "YES BANK Credit Card MITC — UNI fees, waiver conditions and card terms (updated 23 June 2026)",
+        domain: "webcdn.uni.cards",
+        score: 190
+      },
+      {
+        url: "https://quickapply.yes.bank.in/savings/assets/files/yesbank_key_fact_statement.pdf",
+        title: "YES BANK retail card Key Fact Statement — UNI Credit Card fee schedule",
+        domain: "quickapply.yes.bank.in",
+        score: 175
+      }
+    ];
+  }
   if (issuerText.includes("icici") && cardText.includes("sapphiro")) {
     return [
       {
@@ -559,8 +589,19 @@ export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
   const primaryDomain = issuerDomainFor(issuer, cardName);
   const legacyDomain = primaryDomain ? legacyIssuerDomainFor(issuer, primaryDomain) : null;
-  const expectedDomains = [primaryDomain, legacyDomain].filter(Boolean);
   const belongsTo = domain => host === domain || host.endsWith("." + domain);
+
+  // The co-branded card's MITC is hosted on Uni's official document CDN.
+  // Allow only this exact document for the YES BANK UNI Credit Card variant.
+  const isYesBankUni = String(issuer || "").toLowerCase().includes("yes bank") &&
+    /\buni\b/i.test(String(cardName || "")) &&
+    !/\brupay\b/i.test(String(cardName || ""));
+  if (isYesBankUni && host === "webcdn.uni.cards" &&
+      url.pathname === "/nxwave/docs/CC_YesBank_MITC.pdf") {
+    return url;
+  }
+
+  const expectedDomains = [primaryDomain, legacyDomain].filter(Boolean);
 
   if (expectedDomains.length) {
     if (expectedDomains.some(belongsTo)) return url;
@@ -588,6 +629,12 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const domain = issuerDomainFor(issuerValue, cardValue);
   const alternateDomain = domain ? legacyIssuerDomainFor(issuerValue, domain) : null;
   const safeCard = cardValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
+  // YES BANK's UNI landing page is client-rendered. Use its product page plus
+  // the current co-brand MITC and issuer Key Fact Statement as a stable source set.
+  if (issuerValue.toLowerCase().includes("yes bank") && /\buni\b/i.test(cardValue) && !/\brupay\b/i.test(cardValue)) {
+    const curated = knownOfficialFallbacks(issuerValue, cardValue);
+    if (curated.length) return curated;
+  }
   // For known SBI SimplySAVE, the product page and reward-terms PDF are a
   // verified issuer-owned source set. Return them directly rather than spending
   // another 10–20 seconds waiting on search/sitemap providers.
@@ -597,13 +644,6 @@ export async function discoverOfficialUrls(issuer, cardName) {
   }
   // Use the known official Regalia Gold product, fee and reward terms pages as a
   // stable source bundle. Search can rank long marketing pages ahead of Fees & Charges.
-  if (/hdfc/i.test(issuerValue) && /regalia/i.test(cardValue) && /gold/i.test(cardValue)) {
-    const curated = knownOfficialFallbacks(issuerValue, cardValue);
-    if (curated.length) return curated;
-  }
-  // Use the known official product, features, fee and terms pages as a stable
-  // evidence bundle for Regalia Gold. Search can otherwise rank long marketing
-  // pages ahead of the dedicated Fees & Charges page.
   if (/hdfc/i.test(issuerValue) && /regalia/i.test(cardValue) && /gold/i.test(cardValue)) {
     const curated = knownOfficialFallbacks(issuerValue, cardValue);
     if (curated.length) return curated;
@@ -661,7 +701,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const primaryResults = await Promise.all(queries.map(item =>
     readSearchResults(
       "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(item.query),
-      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.11" },
+      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.12" },
       parseDuckDuckGoResults,
       item.expectedDomain
     )
@@ -678,14 +718,14 @@ export async function discoverOfficialUrls(issuer, cardName) {
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(item.query),
-        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.11)" },
+        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.12)" },
         parser: parseDuckDuckGoLiteResults
       })),
       ...fallbackQueries.map(item => ({
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(item.query),
-        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.11)" },
+        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.12)" },
         parser: parseBingRssResults
       }))
     ];
