@@ -84,7 +84,7 @@ test("uses a verified general retail rule when comparing a named merchant catego
   assert.equal(result.ok, true);
   assert.equal(result.unavailable, undefined);
   assert.equal(result.points, 500);
-  assert.match(result.notes.join(" "), /verified general eligible-spend rate was used/i);
+  assert.match(result.notes.join(" "), /configured general/base earning rate was used/i);
 });
 
 test("uses an other-spend rule as a fallback only when the issuer quote says it covers other eligible spend", () => {
