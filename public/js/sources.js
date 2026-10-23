@@ -224,7 +224,7 @@
     const cardDetails = Object.fromEntries(cardFields.filter(key => hasDisplayValue(draft[key])).map(key => [key, draft[key]]));
     if (Object.keys(cardDetails).length) {
       const list = createSummarySection("Card and programme details");
-      appendObjectFields(list, cardDetails);
+      Object.entries(cardDetails).forEach(([key, value]) => appendSummaryItem(list, displayFieldName(key) + ":", value));
     }
 
     renderRuleSection(draft.rules);
@@ -237,7 +237,7 @@
     const otherFields = Object.fromEntries(Object.entries(draft).filter(([key, value]) => !handled.has(key) && hasDisplayValue(value) && !["rawJson", "id"].includes(key)));
     if (Object.keys(otherFields).length) {
       const list = createSummarySection("Other extracted details");
-      appendObjectFields(list, otherFields);
+      Object.entries(otherFields).forEach(([key, value]) => appendSummaryItem(list, displayFieldName(key) + ":", value));
     }
 
     if (!draftSummary.children.length) {
