@@ -783,8 +783,11 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
           const multiplier = Number(match[1]);
           if (!Number.isFinite(multiplier) || multiplier <= 1) continue;
 
-          const merchantMatch = sentence.match(/(?:select|eligible|participating)\s+merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/i) ||
-            sentence.match(/(?:at|on)\s+(?:the\s+)?merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/i);
+          const merchantMatches = [
+            ...sentence.matchAll(/(?:select|eligible|participating)\s+merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi),
+            ...sentence.matchAll(/(?:at|on)\s+(?:the\s+)?merchants?\s*(?:[–—:-]\s*)?([^.;\n]+)/gi)
+          ].sort((a, b) => (a.index || 0) - (b.index || 0));
+          const merchantMatch = merchantMatches[merchantMatches.length - 1] || null;
           let merchantCondition = normalizeMerchantText(merchantMatch?.[1] || "");
           if (/^(?:and more|etc|etcetera)$/i.test(merchantCondition)) merchantCondition = "";
           const hasNamedCondition = Boolean(merchantCondition) ||
