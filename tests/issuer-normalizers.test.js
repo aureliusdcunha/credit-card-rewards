@@ -703,7 +703,7 @@ test("parses the current Source Review Document text bundle format for fees, net
     "Annual Fee: ₹2,500 plus applicable taxes.",
     "Payment network: Visa / Mastercard (variant-dependent).",
     "MCC 4829 and MCC 6012 are excluded from reward points and do not earn rewards."
-  ].join("\\n");
+  ].join("\n");
   const draft = {
     issuer: "HDFC Bank",
     cardName: "Regalia Gold",
