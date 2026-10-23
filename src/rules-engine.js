@@ -54,9 +54,11 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   let chosen = categoryRules[0];
   let fallbackKind = null;
 
-  // Do not use a generic or geography-scoped rate for a named category unless the
-  // card was reviewed and verified. Exact category rules always take precedence.
-  if (!chosen && category !== "general" && card.reviewStatus !== "verified") {
+  // Exact category rules always take precedence. When a configured general/base rule
+  // exists, use it for a non-excluded category even if the card still needs review;
+  // the result remains provisional via the selected rule's status. Never invent a rate
+  // when no usable base rule is stored.
+  if (!chosen && category !== "general" && card.reviewStatus !== "verified" && baseRules.length === 0) {
     return {
       ok: true, unavailable: true, excluded: false, cardId: card.id, cardName: card.name,
       amount: spend, category, points: null, rewardUnit: card.rewardCurrency || "Rewards", valueINR: null,
