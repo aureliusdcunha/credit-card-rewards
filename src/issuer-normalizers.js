@@ -406,6 +406,9 @@ export function normalizeCommonCardFacts(data, context = {}) {
   const networkFact = extractExplicitCardNetwork(sections);
   if (networkFact) {
     data.network = networkFact.value;
+    data.missingItems = data.missingItems.filter(item =>
+      !/payment network specification|could not verify the payment network/i.test(String(item))
+    );
   } else if (isUnknownCardNetwork(data.network)) {
     data.network = null;
     addMissingItem(data, "Could not verify the payment network for this exact card variant from the supplied official source. Confirm Visa, Mastercard, RuPay, American Express or other network details before publishing.");
@@ -443,8 +446,18 @@ export function normalizeCommonCardFacts(data, context = {}) {
     }
   }
 
-  if (joiningFact) data.joiningFee = joiningFact.amount;
-  if (annualFact) data.annualFee = annualFact.amount;
+  if (joiningFact) {
+    data.joiningFee = joiningFact.amount;
+    data.missingItems = data.missingItems.filter(item =>
+      !/exact numerical joining fee amount|joining fee amount/i.test(String(item))
+    );
+  }
+  if (annualFact) {
+    data.annualFee = annualFact.amount;
+    data.missingItems = data.missingItems.filter(item =>
+      !/exact numerical annual fee amount|annual fee amount/i.test(String(item))
+    );
+  }
   if (waiverFact) data.annualFeeWaiver = waiverFact.quote;
 
   if (joiningFact || annualFact) {
