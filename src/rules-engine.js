@@ -18,10 +18,16 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   if (!category) return { ok: false, error: "Select a spending category." };
 
   const date = purchaseDate || new Date().toISOString().slice(0, 10);
+  const conditionalRulesAvailable = (card.rules || []).some(rule =>
+    rule && (rule.calculatorEligible === false || rule.merchantCondition || rule.channelCondition)
+  );
   const eligibleRules = (card.rules || []).filter(rule => {
     const statusOk = ["approved", "demo"].includes(rule.status);
     const dateOk = (!rule.validFrom || rule.validFrom <= date) && (!rule.validTo || rule.validTo >= date);
-    return statusOk && dateOk;
+    // Until the calculator has explicit merchant/channel inputs, never apply a
+    // conditional accelerator to a generic category such as online shopping.
+    const conditionCanBeMatched = rule.calculatorEligible !== false && !rule.merchantCondition && !rule.channelCondition;
+    return statusOk && dateOk && conditionCanBeMatched;
   });
   const eligibleExclusions = (card.exclusions || []).filter(ex => {
     const statusOk = ["approved", "demo"].includes(ex.status);
@@ -244,6 +250,9 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   }
   if (ruleIsDemo || anyDemoExclusions || card.reviewStatus !== "verified") {
     notes.push("Provisional estimate: one or more rules for this card have not been fully verified. Check the linked official terms before making a payment decision.");
+  }
+  if (conditionalRulesAvailable) {
+    notes.push("This card has separate merchant-/channel-specific accelerated rules in its details. They are not applied automatically because the calculator does not ask for an exact merchant and channel; check the rule evidence before relying on this base estimate.");
   }
   notes.push("Reward posting can differ because of rounding, transaction posting date, MCC classification, reversals, offers and issuer-specific rules.");
 
