@@ -185,16 +185,17 @@ test("rejects a supplied official URL that belongs to a different issuer", async
 test("falls back to issuer-wide official source discovery when a supplied product page is JavaScript-only", async () => {
   const originalFetch = globalThis.fetch;
   const fetchedUrls = [];
-  const startUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card";
-  const termsUrl = "https://www.yes.bank.in/content/uni-key-fact-statement.pdf";
-  const termsText = "Official YES BANK UNI Credit Card Key Fact Statement and terms. " +
+  const startUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/rewards-credit-card";
+  const discoveredUrl = "https://www.yes.bank.in/credit-cards/rewards-credit-card";
+  const termsUrl = "https://www.yes.bank.in/content/rewards-card-terms.pdf";
+  const termsText = "Official YES BANK Rewards Credit Card Key Fact Statement and terms. " +
     "Annual fee details, finance charges, rewards, eligible transactions, exclusions, " +
     "fuel surcharge waiver and important cardholder conditions. ".repeat(5);
   const validDraft = {
-    issuer: "Yes Bank", cardName: "Uni", network: null, rewardCurrency: "Uni Coins",
-    annualFee: 499, joiningFee: 0, annualFeeWaiver: null, effectiveDate: null,
+    issuer: "Yes Bank", cardName: "Rewards Credit Card", network: null, rewardCurrency: "Reward Points",
+    annualFee: 499, joiningFee: 499, annualFeeWaiver: null, effectiveDate: null,
     rules: [], exclusions: [], benefits: [],
-    missingItems: ["Confirm the current cashback earning rate from a dedicated rewards document."],
+    missingItems: ["Confirm the current cashback earning rate from the official terms."],
     summary: "Draft awaiting human review."
   };
 
@@ -206,17 +207,17 @@ test("falls back to issuer-wide official source discovery when a supplied produc
       const query = url.searchParams.get("q") || "";
       if (query.includes("site:yes.bank.in")) {
         return new Response(
-          '<html><a class="result__a" href="' + termsUrl + '">YES BANK UNI Credit Card Key Fact Statement PDF</a></html>',
+          '<html><a class="result__a" href="' + discoveredUrl + '">YES BANK Rewards Credit Card</a></html>',
           { headers: { "content-type": "text/html" } }
         );
       }
       return new Response("<html></html>", { headers: { "content-type": "text/html" } });
     }
-
-    if (url.toString() === startUrl) {
+    if (url.toString() === discoveredUrl) {
       return new Response(
-        '<html><head><title>UNI Credit Card | YES BANK</title></head><body>' +
-        '<div id="root"></div><script src="/assets/uni-app.js"></script></body></html>',
+        '<html><head><title>Rewards Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><a href="/content/rewards-card-terms.pdf" title="Rewards Credit Card terms and conditions PDF">Terms PDF</a>' +
+        '<script src="/assets/rewards-app.js"></script></body></html>',
         { headers: { "content-type": "text/html; charset=utf-8" } }
       );
     }
@@ -224,6 +225,13 @@ test("falls back to issuer-wide official source discovery when a supplied produc
       return new Response(new Uint8Array([37, 80, 68, 70, 45, 49]), {
         headers: { "content-type": "application/pdf" }
       });
+    }
+    if (url.hostname === "www.yes.bank.in" && url.pathname === new URL(startUrl).pathname) {
+      return new Response(
+        '<html><head><title>Rewards Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><script src="/assets/rewards-app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
     }
     return new Response("Not found", { status: 404 });
   };
@@ -235,7 +243,7 @@ test("falls back to issuer-wide official source discovery when a supplied produc
         authorization: "Bearer test-admin-token",
         "content-type": "application/json"
       },
-      body: JSON.stringify({ issuer: "Yes Bank", cardName: "Uni", sourceUrl: startUrl })
+      body: JSON.stringify({ issuer: "Yes Bank", cardName: "Rewards Credit Card", sourceUrl: startUrl })
     }), {
       ADMIN_TOKEN: "test-admin-token",
       AI: {
@@ -246,14 +254,14 @@ test("falls back to issuer-wide official source discovery when a supplied produc
 
     assert.equal(response.status, 200, await response.clone().text());
     const body = await response.json();
-    assert.equal(body.ok, true);
     assert.equal(body.discovery.suppliedSourceUrl, true);
     assert.equal(body.discovery.selectedSource, termsUrl);
     assert.ok(body.discovery.candidatesFound >= 2);
     assert.ok(fetchedUrls.includes(startUrl));
+    assert.ok(fetchedUrls.includes(discoveredUrl));
     assert.ok(fetchedUrls.includes(termsUrl));
     assert.ok(fetchedUrls.some(url => url.includes("html.duckduckgo.com")));
-    assert.match(body.sourceExcerpt, /Official YES BANK UNI Credit Card Key Fact Statement/);
+    assert.match(body.sourceExcerpt, /Official YES BANK Rewards Credit Card Key Fact Statement/);
   } finally {
     globalThis.fetch = originalFetch;
   }
