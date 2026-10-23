@@ -735,6 +735,19 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
   if (!Array.isArray(data.benefits)) data.benefits = [];
   if (!Array.isArray(data.missingItems)) data.missingItems = [];
 
+  // Any explicit merchant/channel dependency must remain separate and must not
+  // be applied by the category-only calculator.
+  for (const rule of data.rules) {
+    if (rule && (rule.merchantCondition || rule.channelCondition)) {
+      rule.calculatorEligible = false;
+      if (!rule.label) {
+        rule.label = rule.merchantCondition
+          ? "Merchant-specific rewards — " + String(rule.merchantCondition)
+          : "Channel-specific rewards — " + String(rule.channelCondition);
+      }
+    }
+  }
+
   const sourceText = String(context.sourceText || "");
   const fallbackUrl = String(context.sourceUrl || "");
   const sections = officialSourceSections(sourceText, fallbackUrl);
