@@ -433,6 +433,28 @@ test("discovers exact Uni GoldX sources instead of the legacy UNI Credit Card ca
   }
 });
 
+test("discovers GoldX when the variant field contains only GoldX under YES Bank", async () => {
+  const originalFetch = globalThis.fetch;
+  let outboundCalls = 0;
+  globalThis.fetch = async () => {
+    outboundCalls += 1;
+    throw new Error("The short GoldX variant should use the curated official source bundle.");
+  };
+  try {
+    const results = await discoverOfficialUrls("YES Bank", "GoldX");
+    assert.equal(outboundCalls, 0);
+    assert.equal(results[0].url, "https://www.uni.cards/");
+    assert.ok(results.some(item => item.url === "https://www.uni.cards/campaign/?type=creative_2"));
+    assert.ok(results.some(item => item.url === "https://play.google.com/store/apps/details?id=cards.uni.app.credit"));
+    assert.ok(!results.some(item => item.url.includes("CC_YesBank_MITC.pdf")));
+    assert.ok(!results.some(item => item.url.includes("yesbank_key_fact_statement.pdf")));
+    assert.equal(validateIssuerOfficialUrl("https://www.uni.cards/", "YES Bank", "GoldX").hostname, "www.uni.cards");
+    assert.equal(validateIssuerOfficialUrl("https://play.google.com/store/apps/details?id=cards.uni.app.credit", "YES Bank", "GoldX").hostname, "play.google.com");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("allows Uni official domains only for the exact GoldX variant", () => {
   assert.equal(validateIssuerOfficialUrl("https://www.uni.cards/", "YES Bank", "UNI GoldX").hostname, "www.uni.cards");
   assert.throws(
