@@ -82,8 +82,8 @@ test("comparison treats missing fees and metadata as unknown, not zero", async (
 
 test("Compare page uses current cache-busted assets and release metadata", async () => {
   const html = await read("../public/compare.html");
-  assert.ok(html.includes("app.css?v=0.6.7.0"));
-  assert.ok(html.includes("compare.js?v=0.6.7.0"));
+  assert.ok(html.includes("app.css?v=0.6.8.0"));
+  assert.ok(html.includes("compare.js?v=0.6.8.0"));
   assert.ok(html.includes(`v${APP_VERSION} · build ${APP_BUILD}`));
 });
 

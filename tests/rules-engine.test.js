@@ -367,3 +367,39 @@ test("applies SimplySAVE's shared accelerated-points monthly cap and uses the ba
   assert.match(result.notes.join(" "), /remaining 98,500 of eligible spend uses the general rate/i);
   assert.match(result.notes.join(" "), /shared cap categories/i);
 });
+
+
+test("does not apply merchant-specific accelerated rules to generic spending categories", () => {
+  const card = {
+    id: "hdfc-regalia-gold",
+    name: "Regalia Gold",
+    issuer: "HDFC Bank",
+    rewardCurrency: "Reward Points",
+    reviewStatus: "verified",
+    rules: [
+      { category: "general", rate: 5, perAmount: 200, unit: "Reward Points", status: "approved", sourceQuote: "5 Reward Points for every ₹200 spends." },
+      {
+        category: "other",
+        label: "5X accelerated bonus — Myntra, Nykaa, Reliance Digital, Marks & Spencer",
+        merchantCondition: "Myntra, Nykaa, Reliance Digital, Marks & Spencer",
+        channelCondition: "e-com and POS transactions",
+        isAccelerated: true,
+        isBonus: true,
+        calculatorEligible: false,
+        rate: 20,
+        perAmount: 200,
+        unit: "Reward Points",
+        cap: { type: "points", value: 5000, period: "calendar_month", overCapCategory: "general" },
+        status: "approved",
+        sourceQuote: "5X Reward Points is applicable on spends at select merchants."
+      }
+    ],
+    exclusions: []
+  };
+
+  const result = calculateRewards({ card, amount: 1000, category: "online_shopping" });
+  assert.equal(result.ok, true);
+  assert.equal(result.points, 25);
+  assert.equal(result.rate, 5);
+  assert.ok(result.notes.some(note => /merchant-\/channel-specific accelerated rules.*not applied automatically/i.test(note)));
+});

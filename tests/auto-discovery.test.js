@@ -313,7 +313,7 @@ test("HDFC Regalia Gold extraction combines multiple official sources and produc
     [featureUrl]: "<html><head><title>Regalia Gold Features</title></head><body><h1>Rewarding Everyday Indulgences</h1><p>5 Reward Points for every ₹200 spent on daily and retail spends such as grocery, apparel, utility/bill pay, insurance and school fees, subject to terms.</p><p>Dining benefits: savings on restaurant bills via Swiggy Dineout when paid through the Swiggy app using Regalia Gold.</p><p>Milestone benefits: ₹5,000 worth flight vouchers on spends of ₹5 lakh and ₹7.5 lakh.</p></body></html>"
   };
   const pdfTexts = {
-    [rewardTermsUrl]: "Updates effective 15 May 2026: base reward points of 5 Reward Points for every ₹200 spends across eligible categories. Reward points per statement cycle capped at 50,000. Boarding Edge: any 2 benefits per calendar quarter.",
+    [rewardTermsUrl]: "Updates effective 15 May 2026: base reward points of 5 Reward Points for every ₹200 spends across eligible categories. Reward points per statement cycle capped at 50,000. 5X Reward Points is applicable on spends at select merchants – Myntra, Nykaa, Reliance Digital, Marks & Spencers. 5X Reward Points can be accumulated for e-com and POS transactions. 5X Reward points will be capped at 5,000 RP per month across all brands combined. Base reward points accrued on these will continue as is with no capping. Minimum transaction value to be eligible for the offer or reward points is Rs. 150. Boarding Edge: any 2 benefits per calendar quarter.",
     [generalTermsUrl]: "Regalia Gold general terms: welcome memberships require net retail spends of ₹1 lakh within the first 90 days. Redemption values: flights/hotels ₹0.50 per point; Gold catalogue ₹0.65 per point; vouchers up to ₹0.35 per point. Renewal fee waiver requires ₹4 lakh annual spend."
   };
   globalThis.fetch = async raw => {
@@ -404,10 +404,19 @@ test("HDFC Regalia Gold extraction combines multiple official sources and produc
     assert.ok(promptText.includes(featureUrl));
     assert.ok(promptText.includes(rewardTermsUrl));
     assert.ok(promptText.includes(generalTermsUrl));
-    assert.equal(body.extracted.rules.length, 1);
-    assert.equal(body.extracted.rules[0].rate, 5);
-    assert.equal(body.extracted.rules[0].perAmount, 200);
-    assert.equal(body.extracted.rules[0].sourceUrl, rewardTermsUrl);
+    assert.equal(body.extracted.rules.length, 2);
+    const baseRule = body.extracted.rules.find(rule => rule.category === "general");
+    const acceleratedRule = body.extracted.rules.find(rule => rule.isAccelerated === true);
+    assert.equal(baseRule.rate, 5);
+    assert.equal(baseRule.perAmount, 200);
+    assert.equal(baseRule.sourceUrl, rewardTermsUrl);
+    assert.ok(acceleratedRule);
+    assert.equal(acceleratedRule.rate, 20);
+    assert.equal(acceleratedRule.perAmount, 200);
+    assert.equal(acceleratedRule.cap.value, 5000);
+    assert.equal(acceleratedRule.minTransaction, 150);
+    assert.match(acceleratedRule.merchantCondition, /Myntra.*Nykaa.*Reliance Digital.*Marks/i);
+    assert.equal(acceleratedRule.sourceUrl, rewardTermsUrl);
     assert.ok(body.extracted.benefits.length >= 5);
     assert.ok(body.extracted.benefits.every(benefit => benefit.sourceUrl));
   } finally {

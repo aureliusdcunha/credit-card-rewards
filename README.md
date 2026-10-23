@@ -2,6 +2,14 @@
 
 A multi-page prototype for Indian credit-card rewards. It deliberately uses **one Cloudflare Worker** for API/business logic and separate HTML/CSS/JavaScript assets for each page. Data persistence uses Cloudflare D1; AI-assisted source extraction supports Google Gemini API (preferred when GEMINI_API_KEY is set) with Cloudflare Workers AI as a fallback.
 
+## Release 0.6.8 — 23 October 2026
+
+- Generalizes earning-rule extraction for every issuer/card: base rates, merchant/brand accelerators, transaction types, channels, minimum spend, caps and validity are represented as separate sourced rules when supported.
+- Adds a reusable normalizer to create a separate accelerated bonus rule only when the exact multiplier, a verified base rate and issuer wording support the conversion; variable "up to" multipliers remain benefits pending review.
+- Preserves merchant/channel labels and source evidence in the rule matrix. Conditional merchant rules are intentionally excluded from generic calculator calculations until a transaction can be matched to that specific merchant/channel, preventing accidental overestimates.
+- Reads a balanced set of official product pages and terms PDFs for every issuer instead of limiting broader source coverage to one issuer-specific path.
+- Updates package/Worker version metadata, navigation pill, every page footer, asset cache keys, source discovery user-agent and documentation to **0.6.8 / build 20261023.06**.
+
 ## Release 0.6.7 — 23 October 2026
 
 - Applies the parent issuer-catalogue fallback to pages discovered by search as well as URLs manually supplied by an administrator.
