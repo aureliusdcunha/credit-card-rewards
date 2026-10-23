@@ -445,16 +445,16 @@ function knownOfficialFallbacks(issuer, cardName) {
         score: 245
       },
       {
+        url: "https://play.google.com/store/apps/details?id=cards.uni.app.credit",
+        title: "Uni Cards official app listing — GoldX reward currency and network variants",
+        domain: "play.google.com",
+        score: 245
+      },
+      {
         url: "https://web.uni.cards/",
         title: "Uni GoldX Credit Card — official product page",
         domain: "web.uni.cards",
         score: 240
-      },
-      {
-        url: "https://play.google.com/store/apps/details?id=cards.uni.app.credit",
-        title: "Uni Cards official app listing — GoldX reward currency and network variants",
-        domain: "play.google.com",
-        score: 235
       }
     ];
   }
