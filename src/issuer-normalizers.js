@@ -895,7 +895,12 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
               }
             : null;
 
-          const label = (isBonus ? String(multiplier) + "X accelerated bonus" : String(multiplier) + "X accelerated total") +
+          const offerLabel = isBonus && hasBaseContinuation && !explicitlyAdditional
+            ? String(multiplier) + "X total offer (" + String(effectiveFactor) + "X bonus component)"
+            : isBonus
+              ? String(multiplier) + "X accelerated bonus"
+              : String(multiplier) + "X accelerated total";
+          const label = offerLabel +
             (merchantCondition ? " — " + merchantCondition : " — " + sentence.replace(/\s+/g, " ").slice(0, 100));
           const channelMatch = section.text.match(/(?:can be accumulated|eligible|applicable|valid)\s+(?:for|on|in|through)\s+([^.\n]{1,160}(?:e-?com|pos|point.of.sale|online|offline|smartbuy|portal|app)[^.\n]{0,100})/i);
           const channelCondition = channelMatch ? normalizeMerchantText(channelMatch[1]) : "";
@@ -947,7 +952,7 @@ export function normalizeGenericAcceleratedEarningRules(data, context = {}) {
             if (newMerchantTokens.size > existingTokens.length &&
                 !/\band\s+more\b/i.test(merchantCondition)) {
               equivalentGenerated.merchantCondition = merchantCondition;
-              equivalentGenerated.label = (equivalentGenerated.isBonus ? String(equivalentGenerated.multiplier) + "X accelerated bonus" : String(equivalentGenerated.multiplier) + "X accelerated total") + " — " + merchantCondition;
+              equivalentGenerated.label = offerLabel + " — " + merchantCondition;
             }
             if (channelCondition && !equivalentGenerated.channelCondition) equivalentGenerated.channelCondition = channelCondition;
             if (cap && !equivalentGenerated.cap) equivalentGenerated.cap = cap;
