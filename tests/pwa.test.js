@@ -16,7 +16,7 @@ test("all app pages reference a valid installable Android PWA manifest and icons
   ];
   for (const path of pages) {
     const html = await read(path);
-    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest\?v=0\.6\.13\.0">/);
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest\?v=0\.6\.14\.0">/);
     assert.match(html, /<link rel="icon" type="image\/png" sizes="192x192" href="\/icons\/icon-192\.png/);
     assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/icon-192\.png/);
     assert.match(html, /name="apple-mobile-web-app-capable" content="yes"/);
@@ -33,14 +33,14 @@ test("all app pages reference a valid installable Android PWA manifest and icons
   assert.equal(manifest.background_color, "#0d141b");
   assert.equal(manifest.prefer_related_applications, false);
   assert.ok(manifest.icons.some(icon => icon.sizes === "192x192" && icon.type === "image/png"));
-  assert.ok(manifest.icons.some(icon => icon.sizes === "512x512" && icon.type === "image/svg+xml"));
-  assert.ok(manifest.icons.some(icon => icon.purpose === "maskable" && icon.sizes === "512x512" && icon.src === "/icons/icon-512.svg"));
-  const pngIcon = await readFile(new URL("../public/icons/icon-192.png", import.meta.url));
-  assert.deepEqual([...pngIcon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], "192px fallback must be a real PNG");
-  assert.equal(pngIcon.readUInt32BE(16), 192);
-  assert.equal(pngIcon.readUInt32BE(20), 192);
-  const svgIcon = await read("../public/icons/icon-512.svg");
-  assert.match(svgIcon, /<svg[^>]*width="512"[^>]*height="512"/);
+  assert.ok(manifest.icons.some(icon => icon.sizes === "512x512" && icon.type === "image/png"));
+  assert.ok(manifest.icons.some(icon => icon.purpose === "maskable" && icon.sizes === "512x512" && icon.src === "/icons/icon-512.png"));
+  for (const [path, size] of [["../public/icons/icon-192.png", 192], ["../public/icons/icon-512.png", 512]]) {
+    const pngIcon = await readFile(new URL(path, import.meta.url));
+    assert.deepEqual([...pngIcon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], path + " must be a valid PNG");
+    assert.equal(pngIcon.readUInt32BE(16), size, path + " width must match the manifest");
+    assert.equal(pngIcon.readUInt32BE(20), size, path + " height must match the manifest");
+  }
   assert.ok(manifest.shortcuts.some(shortcut => shortcut.url === "/cards.html"));
   assert.ok(manifest.shortcuts.some(shortcut => shortcut.url === "/calculator.html"));
 });
@@ -50,10 +50,10 @@ test("the service worker precaches the app shell and never intercepts or caches 
   for (const path of [
     '"/index.html"', '"/cards.html"', '"/calculator.html"', '"/compare.html"',
     '"/sources.html"', '"/offline.html"', '"/manifest.webmanifest"',
-    '"/icons/icon-192.png"', '"/icons/icon-512.svg"'
+    '"/icons/icon-192.png"', '"/icons/icon-512.png"'
   ]) assert.ok(worker.includes(path), "precache list should include " + path);
 
-  assert.match(worker, /const CACHE_VERSION = "0\.6\.13"/);
+  assert.match(worker, /const CACHE_VERSION = "0\.6\.14"/);
   assert.match(worker, /url\.pathname === "\/api" \|\| url\.pathname\.startsWith\("\/api\/"\)/);
   const bypass = worker.indexOf('if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return;');
   const fetchCache = worker.indexOf("event.respondWith", bypass);

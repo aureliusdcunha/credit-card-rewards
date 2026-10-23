@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "rewards-intelligence-shell-";
-const CACHE_VERSION = "0.6.13";
+const CACHE_VERSION = "0.6.14";
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 const PRECACHE_URLS = [
   "/",
@@ -11,23 +11,23 @@ const PRECACHE_URLS = [
   "/offline.html",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
-  "/icons/icon-512.svg",
-  "/css/app.css?v=0.6.13.0",
-  "/js/api.js?v=0.6.13.0",
-  "/js/layout.js?v=0.6.13.0",
-  "/js/dashboard.js?v=0.6.13.0",
-  "/js/source-review-prefill.js?v=0.6.13.0",
-  "/js/card-modal.js?v=0.6.13.0",
-  "/js/cards.js?v=0.6.13.0",
-  "/js/calculator.js?v=0.6.13.0",
-  "/js/compare.js?v=0.6.13.0",
-  "/js/sources.js?v=0.6.13.0"
+  "/icons/icon-512.png",
+  "/css/app.css?v=0.6.14.0",
+  "/js/api.js?v=0.6.14.0",
+  "/js/layout.js?v=0.6.14.0",
+  "/js/dashboard.js?v=0.6.14.0",
+  "/js/source-review-prefill.js?v=0.6.14.0",
+  "/js/card-modal.js?v=0.6.14.0",
+  "/js/cards.js?v=0.6.14.0",
+  "/js/calculator.js?v=0.6.14.0",
+  "/js/compare.js?v=0.6.14.0",
+  "/js/sources.js?v=0.6.14.0"
 ];
 
 const STATIC_PATHS = new Set([
   "/", "/index.html", "/cards.html", "/calculator.html", "/compare.html",
   "/sources.html", "/offline.html", "/manifest.webmanifest",
-  "/icons/icon-192.png", "/icons/icon-512.svg",
+  "/icons/icon-192.png", "/icons/icon-512.png",
   "/css/app.css", "/js/api.js", "/js/layout.js", "/js/dashboard.js",
   "/js/source-review-prefill.js", "/js/card-modal.js", "/js/cards.js",
   "/js/calculator.js", "/js/compare.js", "/js/sources.js"
