@@ -46,7 +46,7 @@ test("all pages reference the current release and cache-busted assets", async ()
     "../public/sources.html"
   ]) {
     const html = await read(path);
-    assert.ok(html.includes("app.css?v=0.6.10.0"), path + " needs the terminal stylesheet cache key");
+    assert.ok(html.includes("app.css?v=0.6.11.0"), path + " needs the terminal stylesheet cache key");
     assert.ok(html.includes(`v${APP_VERSION} · build ${APP_BUILD}`), path + " needs current release metadata");
   }
   const layout = await read("../public/js/layout.js");
