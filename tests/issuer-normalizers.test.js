@@ -605,7 +605,7 @@ test("creates a separate Regalia Gold selected-merchant bonus rule from source e
   assert.deepEqual(accelerated.cap, {
     type: "points",
     value: 5000,
-    period: "calendar_month",
+    period: "month",
     overCapCategory: "general"
   });
   assert.match(accelerated.channelCondition, /e-com and POS/i);
