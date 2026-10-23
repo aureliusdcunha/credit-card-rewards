@@ -289,6 +289,7 @@ async function aiExtract(request, env) {
       sourceText = fetched.text;
       sourceTitle = fetched.title;
       intake.sourceUrl = fetched.url;
+      intake.relatedUrls = Array.isArray(fetched.relatedUrls) ? fetched.relatedUrls : [];
       if (!sourceText || (fetched.readableTextLength ?? sourceText.trim().length) < 100) {
         const relatedSources = (fetched.relatedUrls || []).slice(0, 5);
         return json({
@@ -330,6 +331,22 @@ async function aiExtract(request, env) {
     const seenUrls = new Set([normalizeUrl(primaryUrl)]);
     try {
       const discovered = await discoverOfficialUrls(body.issuer, body.cardName);
+      // Follow relevant official terms links found on the submitted issuer page
+      // as well as search/sitemap results. This is how linked SmartBuy/iShop caps,
+      // MCC schedules, fee pages and product-specific T&Cs are recovered.
+      const candidateMap = new Map();
+      for (const item of [...(Array.isArray(intake.relatedUrls) ? intake.relatedUrls : []), ...discovered]) {
+        if (!item?.url) continue;
+        try {
+          const checkedUrl = validateIssuerOfficialUrl(item.url, body.issuer);
+          const key = normalizeUrl(checkedUrl.toString());
+          const existing = candidateMap.get(key);
+          if (!existing || Number(item.score || 0) > Number(existing.score || 0)) {
+            candidateMap.set(key, { ...item, url: checkedUrl.toString() });
+          }
+        } catch {}
+      }
+      const sourceCandidates = [...candidateMap.values()];
       const isPdf = item => /\.pdf(?:[?#]|$)/i.test(String(item.url || "")) || /\bpdf\b/i.test(String(item.title || ""));
       const sourceCandidatePriority = item => {
         const text = String(item.title || "") + " " + String(item.url || "");
@@ -337,7 +354,7 @@ async function aiExtract(request, env) {
           + (/(?:terms|conditions|mitc|mcc|exclusion|reward|points|accelerated|smartbuy|ishop|cap|capping)/i.test(text) ? 30 : 0)
           + (/(?:credit.?card|sapphiro|regalia|gold)/i.test(text) ? 10 : 0);
       };
-      const htmlCandidates = discovered.filter(item => !isPdf(item) && !seenUrls.has(normalizeUrl(item.url)))
+      const htmlCandidates = sourceCandidates.filter(item => !isPdf(item) && !seenUrls.has(normalizeUrl(item.url)))
         .sort((a, b) => sourceCandidatePriority(b) - sourceCandidatePriority(a))
         .slice(0, 3);
       for (const candidate of htmlCandidates) {
@@ -359,7 +376,7 @@ async function aiExtract(request, env) {
       // Read official terms PDFs even when HTML pages were readable. Product pages
       // often advertise rewards while caps, MCC exclusions and eligibility live only
       // in linked PDFs. Keep the number bounded and rank detailed terms first.
-      const pdfCandidates = discovered
+      const pdfCandidates = sourceCandidates
         .filter(item => isPdf(item) && !seenUrls.has(normalizeUrl(item.url)))
         .sort((a, b) => sourceCandidatePriority(b) - sourceCandidatePriority(a))
         .slice(0, 2);
