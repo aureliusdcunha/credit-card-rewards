@@ -376,8 +376,8 @@
       discoverError.textContent = "Enter both the bank and exact card name.";
       return;
     }
-    const normalizedCardName = payload.cardName.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\\s+/g, " ");
-    if (/^(?:(?:credit|charge|debit|prepaid|secured)\\s+cards?|cards?)$/i.test(normalizedCardName)) {
+    const normalizedCardName = payload.cardName.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+    if (/^(?:(?:credit|charge|debit|prepaid|secured)\s+cards?|cards?)$/i.test(normalizedCardName)) {
       discoverError.textContent = '"' + payload.cardName + '" is a card type, not a specific product name. Enter the exact card name (for example, American Express Platinum Card or American Express Gold Card). No search or extraction was started.';
       return;
     }
