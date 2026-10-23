@@ -325,7 +325,7 @@ async function fetchIssuerDiscoveryPage(rawUrl) {
     const response = await fetch(rawUrl, {
       headers: {
         "accept": "text/html,application/xhtml+xml,application/xml,text/xml,text/plain;q=0.9,*/*;q=0.8",
-        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.10)"
+        "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.11)"
       },
       redirect: "follow",
       ...discoveryTimeoutOptions()
@@ -595,6 +595,19 @@ export async function discoverOfficialUrls(issuer, cardName) {
     const curated = knownOfficialFallbacks(issuerValue, cardValue);
     if (curated.length) return curated;
   }
+  // Use the known official Regalia Gold product, fee and reward terms pages as a
+  // stable source bundle. Search can rank long marketing pages ahead of Fees & Charges.
+  if (/hdfc/i.test(issuerValue) && /regalia/i.test(cardValue) && /gold/i.test(cardValue)) {
+    const curated = knownOfficialFallbacks(issuerValue, cardValue);
+    if (curated.length) return curated;
+  }
+  // Use the known official product, features, fee and terms pages as a stable
+  // evidence bundle for Regalia Gold. Search can otherwise rank long marketing
+  // pages ahead of the dedicated Fees & Charges page.
+  if (/hdfc/i.test(issuerValue) && /regalia/i.test(cardValue) && /gold/i.test(cardValue)) {
+    const curated = knownOfficialFallbacks(issuerValue, cardValue);
+    if (curated.length) return curated;
+  }
   const safeIssuer = issuerValue.replace(/["\\]/g, " ").replace(/\s+/g, " ");
   const queries = domain
     ? [
@@ -648,7 +661,7 @@ export async function discoverOfficialUrls(issuer, cardName) {
   const primaryResults = await Promise.all(queries.map(item =>
     readSearchResults(
       "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(item.query),
-      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.10" },
+      { "accept": "text/html", "user-agent": "CreditCardRewardsIntelligence/0.6.11" },
       parseDuckDuckGoResults,
       item.expectedDomain
     )
@@ -665,14 +678,14 @@ export async function discoverOfficialUrls(issuer, cardName) {
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(item.query),
-        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.10)" },
+        headers: { "accept": "text/html", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.11)" },
         parser: parseDuckDuckGoLiteResults
       })),
       ...fallbackQueries.map(item => ({
         query: item.query,
         expectedDomain: item.expectedDomain,
         url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(item.query),
-        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.10)" },
+        headers: { "accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8", "user-agent": "Mozilla/5.0 (compatible; CreditCardRewardsIntelligence/0.6.11)" },
         parser: parseBingRssResults
       }))
     ];
