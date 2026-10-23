@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { inflateSync } from "node:zlib";
 
 async function read(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
@@ -16,7 +17,7 @@ test("all app pages reference a valid installable Android PWA manifest and icons
   ];
   for (const path of pages) {
     const html = await read(path);
-    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest\?v=0\.6\.14\.0">/);
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest\?v=0\.6\.15\.0">/);
     assert.match(html, /<link rel="icon" type="image\/png" sizes="192x192" href="\/icons\/icon-192\.png/);
     assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/icon-192\.png/);
     assert.match(html, /name="apple-mobile-web-app-capable" content="yes"/);
@@ -35,11 +36,44 @@ test("all app pages reference a valid installable Android PWA manifest and icons
   assert.ok(manifest.icons.some(icon => icon.sizes === "192x192" && icon.type === "image/png"));
   assert.ok(manifest.icons.some(icon => icon.sizes === "512x512" && icon.type === "image/png"));
   assert.ok(manifest.icons.some(icon => icon.purpose === "maskable" && icon.sizes === "512x512" && icon.src === "/icons/icon-512.png"));
-  for (const [path, size] of [["../public/icons/icon-192.png", 192], ["../public/icons/icon-512.png", 512]]) {
-    const pngIcon = await readFile(new URL(path, import.meta.url));
-    assert.deepEqual([...pngIcon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], path + " must be a valid PNG");
-    assert.equal(pngIcon.readUInt32BE(16), size, path + " width must match the manifest");
-    assert.equal(pngIcon.readUInt32BE(20), size, path + " height must match the manifest");
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (const byte of bytes) {
+      crc ^= byte;
+      for (let bit = 0; bit < 8; bit++) crc = (crc & 1) ? (0xedb88320 ^ (crc >>> 1)) : (crc >>> 1);
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  for (const [path, expectedSize] of [["../public/icons/icon-192.png", 192], ["../public/icons/icon-512.png", 512]]) {
+    const png = await readFile(new URL(path, import.meta.url));
+    assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], path + " must have a PNG signature");
+    assert.equal(png.readUInt32BE(16), expectedSize, path + " width must match the manifest");
+    assert.equal(png.readUInt32BE(20), expectedSize, path + " height must match the manifest");
+
+    // Check every PNG chunk CRC and make the runtime inflate the IDAT stream,
+    // catching corrupt compressed pixels rather than trusting only the filename/header.
+    const idat = [];
+    let offset = 8;
+    let sawEnd = false;
+    while (offset + 12 <= png.length) {
+      const length = png.readUInt32BE(offset);
+      const type = png.toString("ascii", offset + 4, offset + 8);
+      const dataStart = offset + 8;
+      const dataEnd = dataStart + length;
+      assert.ok(dataEnd + 4 <= png.length, path + " chunk must fit in the file");
+      const chunkBody = png.subarray(offset + 4, dataEnd);
+      assert.equal(png.readUInt32BE(dataEnd), crc32(chunkBody), path + " " + type + " chunk CRC must be valid");
+      if (type === "IDAT") idat.push(png.subarray(dataStart, dataEnd));
+      offset = dataEnd + 4;
+      if (type === "IEND") { sawEnd = true; break; }
+    }
+    assert.ok(sawEnd, path + " must contain IEND");
+    assert.equal(offset, png.length, path + " must not contain trailing/truncated bytes");
+    assert.ok(idat.length > 0, path + " must contain pixel data");
+    const decoded = inflateSync(Buffer.concat(idat));
+    const expectedScanlineBytes = Math.ceil(expectedSize / 8) + 1; // 1-bit indexed PNG + filter byte
+    assert.equal(decoded.length, expectedScanlineBytes * expectedSize, path + " pixel stream must decode at declared dimensions");
   }
   assert.ok(manifest.shortcuts.some(shortcut => shortcut.url === "/cards.html"));
   assert.ok(manifest.shortcuts.some(shortcut => shortcut.url === "/calculator.html"));
@@ -53,7 +87,7 @@ test("the service worker precaches the app shell and never intercepts or caches 
     '"/icons/icon-192.png"', '"/icons/icon-512.png"'
   ]) assert.ok(worker.includes(path), "precache list should include " + path);
 
-  assert.match(worker, /const CACHE_VERSION = "0\.6\.14"/);
+  assert.match(worker, /const CACHE_VERSION = "0\.6\.15"/);
   assert.match(worker, /url\.pathname === "\/api" \|\| url\.pathname\.startsWith\("\/api\/"\)/);
   const bypass = worker.indexOf('if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return;');
   const fetchCache = worker.indexOf("event.respondWith", bypass);
