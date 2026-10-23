@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
-import { discoverOfficialUrls, issuerDomainFor, validateOfficialUrl } from "../src/source-discovery.js";
+import { discoverOfficialUrls, issuerDomainFor, validateOfficialUrl, validateIssuerOfficialUrl } from "../src/source-discovery.js";
 
 test("Standard Chartered resolves to its current official India domain", () => {
   assert.equal(issuerDomainFor("Standard Chartered"), "sc.bank.in");
@@ -297,4 +297,40 @@ test("uses a stable official Regalia Gold source bundle including the dedicated 
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+
+test("uses current official YES BANK UNI sources without relying on search result order", async () => {
+  const originalFetch = globalThis.fetch;
+  let outboundCalls = 0;
+  globalThis.fetch = async () => {
+    outboundCalls += 1;
+    throw new Error("YES BANK UNI should use its stable official source bundle.");
+  };
+  try {
+    const results = await discoverOfficialUrls("YES Bank", "UNI Credit Card");
+    assert.equal(results[0].url, "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card");
+    assert.ok(results.some(item => item.url === "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf"));
+    assert.ok(results.some(item => item.url === "https://quickapply.yes.bank.in/savings/assets/files/yesbank_key_fact_statement.pdf"));
+    assert.equal(outboundCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("allows only the official YES BANK UNI MITC PDF as an issuer-specific Uni CDN source", () => {
+  const exact = validateIssuerOfficialUrl(
+    "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf",
+    "YES Bank",
+    "UNI Credit Card"
+  );
+  assert.equal(exact.hostname, "webcdn.uni.cards");
+  assert.throws(
+    () => validateIssuerOfficialUrl("https://webcdn.uni.cards/nxwave/docs/other.pdf", "YES Bank", "UNI Credit Card"),
+    /domain does not match YES Bank/
+  );
+  assert.throws(
+    () => validateIssuerOfficialUrl("https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf", "YES Bank", "UNI RuPay Credit Card"),
+    /domain does not match YES Bank/
+  );
 });
