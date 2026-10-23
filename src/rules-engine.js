@@ -54,9 +54,11 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   let chosen = categoryRules[0];
   let fallbackKind = null;
 
-  // Do not use a generic or geography-scoped rate for a named category unless the
-  // card was reviewed and verified. Exact category rules always take precedence.
-  if (!chosen && category !== "general" && card.reviewStatus !== "verified") {
+  // Exact category rules always take precedence. When a configured general/base rule
+  // exists, use it for a non-excluded category even if the card still needs review;
+  // the result remains provisional via the selected rule's status. Never invent a rate
+  // when no usable base rule is stored.
+  if (!chosen && category !== "general" && card.reviewStatus !== "verified" && baseRules.length === 0) {
     return {
       ok: true, unavailable: true, excluded: false, cardId: card.id, cardName: card.name,
       amount: spend, category, points: null, rewardUnit: card.rewardCurrency || "Rewards", valueINR: null,
@@ -246,7 +248,7 @@ export function calculateRewards({ card, amount, category, purchaseDate, periodS
   } else if (fallbackKind === "domestic") {
     notes.push("No exact-category or general rule was found; a verified domestic-spend rate was used as a fallback. This assumes the transaction is domestic; this page does not separately ask for transaction geography.");
   } else if (fallbackKind === "general" && category !== "general") {
-    notes.push("No exact-category rule was found; the card's verified general eligible-spend rate was used.");
+    notes.push("No exact-category rule was found; the configured general/base earning rate was used; verify the provisional rate before relying on it.");
   }
   if (ruleIsDemo || anyDemoExclusions || card.reviewStatus !== "verified") {
     notes.push("Provisional estimate: one or more rules for this card have not been fully verified. Check the linked official terms before making a payment decision.");
