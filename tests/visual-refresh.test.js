@@ -77,8 +77,8 @@ test("calculator and comparison selectors include SimplySAVE accelerated categor
 
 test("mobile catalogue uses compact filters and one card per row", async () => {
   const css = await read("../public/css/app.css");
-  assert.match(css, /0\\.6\\.16\\s+—\\s+Responsive mobile card catalogue/);
-  assert.match(css, /@media \\(max-width:\\s*720px\\)\\s*\\{[^}]*\\.card-grid\\s*\\{[^}]*grid-template-columns:\\s*minmax\\(0,\\s*1fr\\)/s);
-  assert.match(css, /\\.toolbar select\\s*\\{[^}]*height:\\s*46px/s);
-  assert.match(css, /\\.card-grid \\.tile-meta\\s*\\{[^}]*grid-template-columns:\\s*repeat\\(2,\\s*minmax\\(0,\\s*1fr\\)\\)/s);
+  assert.match(css, /0\.6\.16\s+—\s+Responsive mobile card catalogue/);
+  assert.match(css, /@media \(max-width:\s*720px\)\s*\{[^}]*\.card-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
+  assert.match(css, /\.toolbar select\s*\{[^}]*height:\s*46px/s);
+  assert.match(css, /\.card-grid \.tile-meta\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
 });
