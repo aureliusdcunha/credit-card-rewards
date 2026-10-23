@@ -72,6 +72,75 @@ function addBenefitFromRule(data, rule, sourceText, fallbackUrl, description) {
 }
 
 
+function addSourceBackedBaseRules(data, sections) {
+  if (!Array.isArray(data.rules)) data.rules = [];
+  const hasUsableRule = category => data.rules.some(rule =>
+    rule && rule.category === category &&
+    Number.isFinite(Number(rule.rate)) && Number(rule.rate) >= 0 &&
+    Number.isFinite(Number(rule.perAmount)) && Number(rule.perAmount) > 0 &&
+    String(rule.unit || "").trim()
+  );
+  const unit = String(data.rewardCurrency || "Reward Points");
+  const addRule = (category, rate, perAmount, quote, section) => {
+    if (hasUsableRule(category)) return;
+    if (!Number.isFinite(rate) || rate < 0 || !Number.isFinite(perAmount) || perAmount <= 0) return;
+    data.rules.push({
+      category,
+      label: category === "general" ? "Base retail reward rate" : "Source-stated " + category.replace(/_/g, " ") + " reward rate",
+      rate,
+      perAmount,
+      unit,
+      minTransaction: null,
+      cap: null,
+      rounding: "down",
+      validFrom: null,
+      validTo: null,
+      sourceQuote: quote,
+      sourceUrl: section.url || null,
+      notes: "Structured from an explicit numeric earning rate in the official source bundle. Verify transaction eligibility and effective date before publishing."
+    });
+  };
+
+  for (const section of sections) {
+    const text = String(section.text || "");
+    const flat = text.replace(/\\s+/g, " ").trim();
+    const direct = /(?:base\\s+)?(\\d+(?:\\.\\d+)?)\\s*(?:reward\\s*)?points?\\s+(?:for\\s+every|on\\s+every|per|for\\s+each)\\s*(?:₹|rs\\.?\\s*|inr\\s*)?([\\d,]+(?:\\.\\d+)?)(?:\\s*(?:spent|spends|spend|transaction))?/ig;
+    for (const match of flat.matchAll(direct)) {
+      const rate = Number(match[1]);
+      const perAmount = Number(String(match[2]).replace(/,/g, ""));
+      const quote = match[0];
+      const category = /\\binternational\\b/i.test(quote) ? "international"
+        : /\\b(?:utility|utilities|insurance)\\b/i.test(quote) ? (/\\butility|utilities\\b/i.test(quote) ? "utilities" : "insurance")
+        : "general";
+      addRule(category, rate, perAmount, quote, section);
+    }
+
+    // Some issuer pages render a rate table as a denominator heading followed
+    // by rows such as "4 On International Spend / 2 On Domestic Spend / 1 On
+    // Utility and Insurance Spend", with no repeated "points per ₹100" wording.
+    const basis = flat.match(/(?:earn|earning)\\s+(?:reward\\s+)?points?\\s+on\\s+every\\s*(?:₹|rs\\.?\\s*|inr\\s*)?([\\d,]+(?:\\.\\d+)?)\\s*(?:spent|spend)/i);
+    if (!basis) continue;
+    const perAmount = Number(String(basis[1]).replace(/,/g, ""));
+    const rows = [
+      { category: "international", pattern: /\\b(\\d+(?:\\.\\d+)?)\\s+(?:reward\\s+)?points?\\s+on\\s+international\\s+spend\\b|\\b(\\d+(?:\\.\\d+)?)\\s+on\\s+international\\s+spend\\b/i },
+      { category: "general", pattern: /\\b(\\d+(?:\\.\\d+)?)\\s+(?:reward\\s+)?points?\\s+on\\s+domestic\\s+spend\\b|\\b(\\d+(?:\\.\\d+)?)\\s+on\\s+domestic\\s+spend\\b/i },
+      { category: "utilities", pattern: /\\b(\\d+(?:\\.\\d+)?)\\s+(?:reward\\s+)?points?\\s+on\\s+utility(?:\\s+and\\s+insurance)?\\s+spend\\b|\\b(\\d+(?:\\.\\d+)?)\\s+on\\s+utility(?:\\s+and\\s+insurance)?\\s+spend\\b/i },
+      { category: "insurance", pattern: /\\b(\\d+(?:\\.\\d+)?)\\s+(?:reward\\s+)?points?\\s+on\\s+insurance\\s+spend\\b|\\b(\\d+(?:\\.\\d+)?)\\s+on\\s+insurance\\s+spend\\b/i }
+    ];
+    for (const row of rows) {
+      const match = row.pattern.exec(flat);
+      if (!match) continue;
+      const rate = Number(match[1] || match[2]);
+      const start = Math.max(0, match.index - 30);
+      const quote = flat.slice(start, Math.min(flat.length, match.index + match[0].length + 30)).trim();
+      addRule(row.category, rate, perAmount, quote, section);
+      if (row.category === "utilities" && /utility\\s+and\\s+insurance/i.test(match[0])) {
+        addRule("insurance", rate, perAmount, quote, section);
+      }
+    }
+  }
+}
+
 function findMccExclusionFacts(sections) {
   const facts = [];
   const seen = new Set();
@@ -415,6 +484,7 @@ export function normalizeCommonCardFacts(data, context = {}) {
   }
 
   const clauses = officialClauses(sections);
+  addSourceBackedBaseRules(data, sections);
   const combinedMembershipFact = combinedMembershipFeeFact(sections);
   const parsedJoiningFact = explicitFeeFact(clauses, "joining");
   const parsedAnnualFact = explicitFeeFact(clauses, "annual");
