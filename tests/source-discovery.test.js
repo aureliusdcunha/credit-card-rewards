@@ -489,6 +489,14 @@ test("GoldX source review rejects legacy UNI MITC evidence and reads GoldX rewar
         { headers: { "content-type": "text/html; charset=utf-8" } }
       );
     }
+    if (url.hostname === "play.google.com" && url.pathname === "/store/apps/details") {
+      return new Response(
+        "<html><head><title>Uni: GoldX &amp; UPI Credit Card</title></head><body><main>" +
+        ("Uni GoldX rewards are Uni Coins; 100 Uni Coins = INR 1. GoldX primary card variants may be Visa or Mastercard and a complementary RuPay variant can be requested. ").repeat(4) +
+        "</main></body></html>",
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
     return new Response("Not found", { status: 404 });
   };
 
@@ -519,9 +527,25 @@ test("GoldX source review rejects legacy UNI MITC evidence and reads GoldX rewar
     assert.match(extractionPrompt, /5% back on Amazon/i);
     assert.match(extractionPrompt, /7% back on flights and hotels/i);
     assert.match(extractionPrompt, /50% back on PVR and INOX/i);
+    assert.match(extractionPrompt, /100 Uni Coins = INR 1/i);
+    assert.match(extractionPrompt, /Visa or Mastercard/i);
     assert.doesNotMatch(extractionPrompt, /Zagg Credit Card annual fee INR 399/i);
     assert.doesNotMatch(extractionPrompt, /Zagg Credit Card waiver INR 300000/i);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+
+test("allows the official Uni Cards app listing only for GoldX", () => {
+  const url = validateIssuerOfficialUrl(
+    "https://play.google.com/store/apps/details?id=cards.uni.app.credit",
+    "YES Bank",
+    "UNI GoldX"
+  );
+  assert.equal(url.hostname, "play.google.com");
+  assert.throws(
+    () => validateIssuerOfficialUrl("https://play.google.com/store/apps/details?id=com.other.app", "YES Bank", "UNI GoldX"),
+    /domain does not match YES Bank/
+  );
 });

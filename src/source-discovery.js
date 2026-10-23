@@ -12,7 +12,7 @@ export const OFFICIAL_DOMAINS = [
   "hsbc.co.in", "icicibank.com", "americanexpress.com", "amex.co.in", "bobfinancial.com",
   "federalbank.co.in", "aubank.in", "standardchartered.co.in",
   // Official Uni CDN hosting the current co-branded YES BANK Credit Card MITC.
-  "webcdn.uni.cards", "uni.cards"
+  "webcdn.uni.cards", "uni.cards", "play.google.com"
 ];
 
 const ISSUER_DOMAIN_MAP = [
@@ -445,6 +445,12 @@ function knownOfficialFallbacks(issuer, cardName) {
         score: 245
       },
       {
+        url: "https://play.google.com/store/apps/details?id=cards.uni.app.credit",
+        title: "Uni Cards official app listing — GoldX reward currency and network variants",
+        domain: "play.google.com",
+        score: 245
+      },
+      {
         url: "https://web.uni.cards/",
         title: "Uni GoldX Credit Card — official product page",
         domain: "web.uni.cards",
@@ -629,6 +635,11 @@ export function validateIssuerOfficialUrl(raw, issuer, cardName = "") {
   // Allow Uni's own official product pages for GoldX, but keep this exception
   // tightly scoped to the exact GoldX variant.
   if (isUniGoldX && (host === "uni.cards" || host.endsWith(".uni.cards"))) return url;
+  // The official Uni Cards Google Play listing documents the GoldX reward currency
+  // and network variants; scope this third-party-host exception to its exact app ID.
+  if (isUniGoldX && host === "play.google.com" &&
+      url.pathname === "/store/apps/details" &&
+      url.searchParams.get("id") === "cards.uni.app.credit") return url;
   if (isYesBankUni && host === "webcdn.uni.cards" &&
       url.pathname === "/nxwave/docs/CC_YesBank_MITC.pdf") {
     return url;

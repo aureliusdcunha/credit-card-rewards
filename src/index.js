@@ -331,7 +331,7 @@ async function aiExtract(request, env) {
     try {
       const discovered = await discoverOfficialUrls(body.issuer, body.cardName);
       const isPdf = item => /\.pdf(?:[?#]|$)/i.test(String(item.url || "")) || /\bpdf\b/i.test(String(item.title || ""));
-      const htmlCandidates = discovered.filter(item => !isPdf(item) && !seenUrls.has(normalizeUrl(item.url))).slice(0, 2);
+      const htmlCandidates = discovered.filter(item => !isPdf(item) && !seenUrls.has(normalizeUrl(item.url))).slice(0, isUniGoldX ? 3 : 2);
       for (const candidate of htmlCandidates) {
         try {
           const related = await fetchOfficialSource(candidate.url, env.AI, env, body.cardName);
