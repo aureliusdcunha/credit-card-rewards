@@ -342,9 +342,13 @@ function explicitFeeFact(clauses, feeKind) {
   const zeroLabel = isJoining
     ? /\bno joining fee\b|\bjoining fee\s*(?::|is)?\s*(?:nil|zero|₹\s*0)\b/i
     : /\bno (?:annual|renewal|membership) fee\b|\b(?:annual|renewal|membership) fee\s*(?::|is)?\s*(?:nil|zero|₹\s*0)\b/i;
+  // Some bank fee tables omit the currency symbol in the Charges column
+  // (for example, "Joining fee 3000 (Nil* for eligible Burgundy customers").
+  // Accept a bare amount only when it follows the fee label immediately; the
+  // existing spend/waiver guard below prevents picking up waiver thresholds.
   const priceAfterLabel = isJoining
-    ? /\bjoining fee\b\s*(?:(?:is|of)\s*)?(?:[:\-]\s*)?(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)/i
-    : /\b(?:annual|renewal|membership) fee\b\s*(?:(?:is|of)\s*)?(?:[:\-]\s*)?(?:₹\s*|Rs\.?\s*|INR\s*)([\d,]+(?:\.\d+)?)/i;
+    ? /\\bjoining fee\\b\\s*(?:(?:is|of)\\s*)?(?:[:\\-]\\s*)?(?:(?:₹\\s*|Rs\\.?\\s*|INR\\s*))?([\\d,]+(?:\\.\\d+)?)/i
+    : /\\b(?:annual|renewal|membership) fee\\b\\s*(?:(?:is|of)\\s*)?(?:[:\\-]\\s*)?(?:(?:₹\\s*|Rs\\.?\\s*|INR\\s*))?([\\d,]+(?:\\.\\d+)?)/i;
 
   for (const clause of clauses) {
     if (zeroLabel.test(clause.quote)) return { ...clause, amount: 0, explicitZero: true };
