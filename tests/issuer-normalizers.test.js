@@ -763,3 +763,41 @@ test("recovers base and category reward rates from issuer-rendered numeric rewar
   assert.deepEqual([insurance?.rate, insurance?.perAmount], [1, 100]);
   assert.equal(draft.missingItems.some(item => /base reward point earning rate/i.test(item)), false);
 });
+
+
+test("overrides incorrect AI fee values from Axis Horizon official fee-table rows without currency symbols", () => {
+  const sourceUrl = "https://www.axis.bank.in/cards/horizon/fees-and-benefits";
+  const sourceText = [
+    "OFFICIAL SOURCE 1",
+    "TITLE: Axis Bank Horizon Credit Card Fees and Charges",
+    "URL: " + sourceUrl,
+    "SOURCE TEXT START",
+    "Description",
+    "Charges",
+    "Joining fee",
+    "3000 (Nil* for customers with a Burgundy Savings Account opened on or after 1st July 2026)",
+    "Annual Fee",
+    "3000 (Nil* for customers with a Burgundy Savings Account opened on or after 1st July 2026)",
+    "SOURCE TEXT END"
+  ].join("\n");
+  const draft = {
+    issuer: "Axis Bank",
+    cardName: "Axis Bank Horizon Credit Card",
+    joiningFee: 5000,
+    annualFee: 5000,
+    benefits: [],
+    missingItems: [],
+    rules: [],
+    exclusions: []
+  };
+
+  normalizeCommonCardFacts(draft, { issuer: draft.issuer, cardName: draft.cardName, sourceText, sourceUrl });
+
+  assert.equal(draft.joiningFee, 3000);
+  assert.equal(draft.annualFee, 3000);
+  const fee = draft.benefits.find(item => item.name === "Joining and annual fee");
+  assert.ok(fee);
+  assert.match(fee.description, /Joining fee: ₹3,000/);
+  assert.match(fee.description, /Annual\/renewal fee: ₹3,000/);
+  assert.equal(fee.sourceUrl, sourceUrl);
+});
