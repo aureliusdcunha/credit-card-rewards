@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#0d141b"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Card Rewards"><link rel="manifest" href="/manifest.webmanifest?v=0.6.23.0"><link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=0.6.23.0"><link rel="apple-touch-icon" href="/icons/icon-192.png?v=0.6.23.0"><title>Compare cards · Rewards Intelligence</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"><link rel="stylesheet" href="/css/app.css?v=0.6.23.0"><script defer src="/js/api.js?v=0.6.23.0"></script><script defer src="/js/layout.js?v=0.6.23.0"></script><script defer src="/js/compare.js?v=0.6.23.0"></script></head>
+<body><div id="site-nav"></div><main class="page-shell">
+<section class="page-heading"><div><div class="eyebrow muted">SIDE-BY-SIDE ANALYSIS</div><h1>Compare cards</h1><p>Select the cards you are considering, then switch between reward-point estimates and a benefits/features comparison. Your card selection is shared by both tabs.</p></div><div class="heading-mark">⇄</div></section>
+
+<section class="panel compare-controls">
+  <div class="card-select-area">
+    <div class="compare-picker-heading"><div><span class="field-label">Cards to compare <small>(2–5 cards)</small></span><p class="field-help">Search by issuer or card name. Selected cards remain selected when you filter the list.</p></div><span id="compare-selection-count" class="compare-selection-chip">Choose 2–5 cards</span></div>
+    <label class="field-label compare-search-label" for="compare-card-search">Find cards</label>
+    <input id="compare-card-search" type="search" placeholder="Search by card or issuer…">
+    <div id="compare-card-options" class="compare-card-options">Loading cards…</div>
+  </div>
+</section>
+
+<div class="compare-tabs" role="tablist" aria-label="Card comparison views">
+  <button id="compare-tab-points" class="compare-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="compare-panel-points" tabindex="0"><span class="compare-tab-index">01</span><span><b>Reward points</b><small>Calculate the same purchase</small></span></button>
+  <button id="compare-tab-benefits" class="compare-tab" type="button" role="tab" aria-selected="false" aria-controls="compare-panel-benefits" tabindex="-1"><span class="compare-tab-index">02</span><span><b>Benefits</b><small>Compare card features and fees</small></span></button>
+</div>
+
+<section id="compare-panel-points" class="compare-tab-panel is-active" role="tabpanel" aria-labelledby="compare-tab-points">
+  <section class="panel compare-scenario-panel">
+    <div class="panel-header"><div><h2>Reward-point scenario</h2><p>Run the exact same transaction against each selected card. Only approved rules can produce a verified estimate.</p></div><span class="step-badge">₹</span></div>
+    <form id="compare-form" class="compare-form">
+      <div class="compare-field"><label class="field-label" for="compare-amount">Purchase amount (₹)</label><input id="compare-amount" type="number" min="0.01" step="0.01" value="25000" required></div>
+      <div class="compare-field"><label class="field-label" for="compare-category">Spending category</label><select id="compare-category"><option value="general">General eligible retail</option><option value="airline_direct">Airline direct</option><option value="travel_edge">Issuer travel portal</option><option value="travel_agency">Travel agent / OTA</option><option value="groceries">Groceries</option><option value="dining">Dining</option><option value="movies">Movies</option><option value="departmental_stores">Departmental stores</option><option value="online_shopping">Online shopping</option><option value="utilities">Utilities / telecom</option><option value="insurance">Insurance</option><option value="education">Education</option><option value="rent">Rent</option><option value="fuel">Fuel</option><option value="wallet">Wallet load</option><option value="other">Other</option></select></div>
+      <div class="compare-field"><label class="field-label" for="compare-date">Transaction date</label><input id="compare-date" type="date" required></div>
+      <button class="button button-primary" type="submit">Calculate rewards →</button>
+    </form>
+  </section>
+  <section class="section-head space-top"><div><div class="eyebrow muted">SCENARIO OUTPUT</div><h2>Estimated reward points</h2></div><span id="compare-status" class="section-note">Choose cards and calculate</span></section>
+  <section id="compare-results" class="compare-results"><div class="empty-state"><h3>Ready when you are</h3><p>Select at least two cards, enter your purchase details, and calculate the same transaction across them.</p></div></section>
+  <section class="notice notice-neutral space-top"><span class="notice-icon">i</span><div><strong>Points are not directly interchangeable.</strong><p>A larger point count does not necessarily mean a better rupee return. This view compares point estimates; redemption value, transfer partners and caps vary by card and route.</p></div></section>
+</section>
+
+<section id="compare-panel-benefits" class="compare-tab-panel" role="tabpanel" aria-labelledby="compare-tab-benefits" hidden>
+  <section class="section-head"><div><div class="eyebrow muted">CARD FACTS / SIDE BY SIDE</div><h2>Benefits, fees &amp; features</h2><p class="field-help">Compare card-level facts without entering a transaction. Expand a rule to inspect its issuer quote.</p></div><span id="compare-matrix-status" class="section-note">Select at least two cards</span></section>
+  <section id="compare-matrix" class="compare-matrix-host"><div class="empty-state"><h3>Compare card benefits</h3><p>Select at least two cards above to compare fees, rewards, benefits, restrictions and source evidence.</p></div></section>
+  <section class="notice notice-neutral space-top"><span class="notice-icon">i</span><div><strong>Read missing values carefully.</strong><p>“Not recorded” means the catalogue has no verified value; it does not mean ₹0, no restrictions or no benefits. Check the card variant and issuer source before applying for a card.</p></div></section>
+</section>
+<footer class="site-footer"><span>Rewards Intelligence · v0.6.23 · build 20261023.21</span><span>Comparisons use reviewed catalogue data; unverified facts are labelled.</span></footer></main></body></html>
