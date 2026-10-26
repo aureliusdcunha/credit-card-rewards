@@ -1,0 +1,555 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import worker from "../src/index.js";
+
+test("automatic source reading follows an official terms PDF linked from a JavaScript-heavy issuer page", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  const validDraft = {
+    issuer: "Yes Bank",
+    cardName: "Rewards Credit Card",
+    network: null,
+    rewardCurrency: "Points",
+    annualFee: null,
+    joiningFee: null,
+    annualFeeWaiver: null,
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [],
+    missingItems: ["Confirm numeric reward rate from the current card terms."],
+    summary: "Draft awaiting human review."
+  };
+  const termsText = "Official Rewards Credit Card terms and conditions. " +
+    "Eligible retail purchases, reward programme rules, annual fees, exclusion categories, " +
+    "minimum spend conditions, benefits and service charges. ".repeat(4);
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+
+    if (url.hostname === "html.duckduckgo.com") {
+      const query = url.searchParams.get("q") || "";
+      if (query.includes("site:yes.bank.in")) {
+        return new Response(
+          '<html><a class="result__a" href="https://www.yes.bank.in/credit-cards/rewards-credit-card">YES Bank Rewards Credit Card</a></html>',
+          { headers: { "content-type": "text/html" } }
+        );
+      }
+      return new Response("<html></html>", { headers: { "content-type": "text/html" } });
+    }
+
+    if (url.hostname === "www.yes.bank.in" && url.pathname === "/credit-cards/rewards-credit-card") {
+      return new Response(
+        '<html><head><title>Rewards Credit Card | Yes Bank</title></head><body>' +
+        '<main><div id="app"></div>' +
+        '<a href="/content/rewards-card-terms.pdf" title="Uni credit card terms and conditions PDF">Terms and Conditions PDF</a>' +
+        '</main><script src="/assets/app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+
+    if (url.hostname === "www.yes.bank.in" && url.pathname === "/content/rewards-card-terms.pdf") {
+      return new Response(new Uint8Array([37, 80, 68, 70, 45, 49]), {
+        headers: { "content-type": "application/pdf" }
+      });
+    }
+
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "Yes Bank", cardName: "Rewards Credit Card" })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async toMarkdown() {
+          return { format: "markdown", data: termsText };
+        },
+        async run() {
+          return { response: JSON.stringify(validDraft) };
+        }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.extractionMode, "auto-discovery");
+    assert.equal(body.discovery.selectedSource, "https://www.yes.bank.in/content/rewards-card-terms.pdf");
+    assert.ok(fetchedUrls.includes("https://www.yes.bank.in/content/rewards-card-terms.pdf"));
+    assert.match(body.sourceExcerpt, /Official Rewards Credit Card terms and conditions/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("uses a supplied YES Bank Uni product URL without depending on search discovery", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  const startUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card";
+  const termsUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-card-terms.pdf";
+  const termsText = "Official Uni Credit Card terms and conditions. " +
+    "Eligible retail purchases, reward programme rules, annual fees, exclusion categories, " +
+    "minimum spend conditions, benefits and service charges. ".repeat(4);
+  const validDraft = {
+    issuer: "Yes Bank", cardName: "Uni", network: null, rewardCurrency: "Points",
+    annualFee: null, joiningFee: null, annualFeeWaiver: null, effectiveDate: null,
+    rules: [], exclusions: [], benefits: [],
+    missingItems: ["Confirm numeric reward rate from the current card terms."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+
+    if (["html.duckduckgo.com", "lite.duckduckgo.com", "www.bing.com"].includes(url.hostname)) {
+      throw new Error("Search discovery should be skipped when an official URL is supplied.");
+    }
+    if (url.toString() === startUrl) {
+      return new Response(
+        '<html><head><title>Uni Credit Card | Yes Bank</title></head><body>' +
+        '<main><div id="app"></div><a href="' + termsUrl + '" title="Uni Credit Card terms and conditions PDF">Terms and Conditions PDF</a></main>' +
+        '<script src="/assets/app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === termsUrl) {
+      return new Response(new Uint8Array([37, 80, 68, 70, 45, 49]), {
+        headers: { "content-type": "application/pdf" }
+      });
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "Yes Bank", cardName: "Uni", sourceUrl: startUrl })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async toMarkdown() { return { format: "markdown", data: termsText }; },
+        async run() { return { response: JSON.stringify(validDraft) }; }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.suppliedSourceUrl, true);
+    assert.equal(body.discovery.candidatesFound, 1);
+    assert.equal(body.discovery.selectedSource, termsUrl);
+    assert.ok(fetchedUrls.includes(startUrl));
+    assert.ok(fetchedUrls.includes(termsUrl));
+    assert.ok(!fetchedUrls.some(url => /duckduckgo|bing\\.com/.test(url)));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("rejects a supplied official URL that belongs to a different issuer", async () => {
+  const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer test-admin-token",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      issuer: "Yes Bank",
+      cardName: "Uni",
+      sourceUrl: "https://www.axis.bank.in/cards/credit-card/axis-horizon-credit-card"
+    })
+  }), {
+    ADMIN_TOKEN: "test-admin-token",
+    AI: { async run() { return { response: "{}" }; } }
+  });
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.match(body.error, /domain does not match Yes Bank/);
+});
+
+
+test("falls back to issuer-wide official source discovery when a supplied product page is JavaScript-only", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  const startUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/rewards-credit-card";
+  const discoveredUrl = "https://www.yes.bank.in/credit-cards/rewards-credit-card";
+  const termsUrl = "https://www.yes.bank.in/content/rewards-card-terms.pdf";
+  const termsText = "Official YES BANK Rewards Credit Card Key Fact Statement and terms. " +
+    "Annual fee details, finance charges, rewards, eligible transactions, exclusions, " +
+    "fuel surcharge waiver and important cardholder conditions. ".repeat(5);
+  const validDraft = {
+    issuer: "Yes Bank", cardName: "Rewards Credit Card", network: null, rewardCurrency: "Reward Points",
+    annualFee: 499, joiningFee: 499, annualFeeWaiver: null, effectiveDate: null,
+    rules: [], exclusions: [], benefits: [],
+    missingItems: ["Confirm the current cashback earning rate from the official terms."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+
+    if (url.hostname === "html.duckduckgo.com") {
+      const query = url.searchParams.get("q") || "";
+      if (query.includes("site:yes.bank.in")) {
+        return new Response(
+          '<html><a class="result__a" href="' + discoveredUrl + '">YES BANK Rewards Credit Card</a></html>',
+          { headers: { "content-type": "text/html" } }
+        );
+      }
+      return new Response("<html></html>", { headers: { "content-type": "text/html" } });
+    }
+    if (url.toString() === discoveredUrl) {
+      return new Response(
+        '<html><head><title>Rewards Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><a href="/content/rewards-card-terms.pdf" title="Rewards Credit Card terms and conditions PDF">Terms PDF</a>' +
+        '<script src="/assets/rewards-app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === termsUrl) {
+      return new Response(new Uint8Array([37, 80, 68, 70, 45, 49]), {
+        headers: { "content-type": "application/pdf" }
+      });
+    }
+    if (url.hostname === "www.yes.bank.in" && url.pathname === new URL(startUrl).pathname) {
+      return new Response(
+        '<html><head><title>Rewards Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><script src="/assets/rewards-app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "Yes Bank", cardName: "Rewards Credit Card", sourceUrl: startUrl })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async toMarkdown() { return { format: "markdown", data: termsText }; },
+        async run() { return { response: JSON.stringify(validDraft) }; }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.discovery.suppliedSourceUrl, true);
+    assert.equal(body.discovery.selectedSource, termsUrl);
+    assert.ok(body.discovery.candidatesFound >= 2);
+    assert.ok(fetchedUrls.includes(startUrl));
+    assert.ok(fetchedUrls.includes(discoveredUrl));
+    assert.ok(fetchedUrls.includes(termsUrl));
+    assert.ok(fetchedUrls.some(url => url.includes("html.duckduckgo.com")));
+    assert.match(body.sourceExcerpt, /Official YES BANK Rewards Credit Card Key Fact Statement/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("uses the supplied product URL's parent catalogue when the product page is JavaScript-only", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  let extractionPrompt = "";
+  const startUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card";
+  const catalogueUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/";
+  const catalogueHtml = '<html><head><title>Credit Cards | YES BANK</title></head><body><main>' +
+    '<section><article><h3>UNI Credit Card</h3>' +
+    '<p>Joining Fees 0. Renewal Fees ₹499.</p>' +
+    '<p>1% cash back in Uni Coins on all transactions.</p>' +
+    '<p>0% foreign currency conversion charges for international transactions.</p>' +
+    '<p>1% fuel surcharge waiver on fuel transactions.</p></article>' +
+    '<article><h3>UNI Rupay Credit Card</h3><p>Joining Fees 0. Renewal Fees ₹0.</p>' +
+    '<p>Different rewards and eligibility conditions for this other variant.</p></article>' +
+    '<article><h3>Zagg Credit Card</h3><p>Two domestic lounge visits subject to spend eligibility.</p></article>' +
+    '</section></main></body></html>';
+  const validDraft = {
+    issuer: "Yes Bank", cardName: "UNI Credit Card", network: null, rewardCurrency: "Uni Coins",
+    annualFee: 499, joiningFee: 0, annualFeeWaiver: null, effectiveDate: null,
+    rules: [], exclusions: [], benefits: [],
+    missingItems: ["Confirm the current reward programme limitations from dedicated terms."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+
+    if (url.toString() === startUrl) {
+      return new Response(
+        '<html><head><title>UNI Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><script src="/assets/uni-app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === catalogueUrl || url.toString() === catalogueUrl.slice(0, -1)) {
+      return new Response(catalogueHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    if (["html.duckduckgo.com", "lite.duckduckgo.com", "www.bing.com"].includes(url.hostname)) {
+      throw new Error("Search should not be needed if the parent official catalogue is readable.");
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "Yes Bank", cardName: "UNI Credit Card", sourceUrl: startUrl })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async run(_model, request) {
+          extractionPrompt = request.messages?.[1]?.content || "";
+          return { response: JSON.stringify(validDraft) };
+        }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.suppliedSourceUrl, true);
+    assert.equal(body.discovery.selectedSource, catalogueUrl);
+    assert.ok(fetchedUrls.includes(startUrl));
+    assert.ok(fetchedUrls.includes(catalogueUrl));
+    assert.match(extractionPrompt, /1% cash back in Uni Coins on all transactions/);
+    assert.match(extractionPrompt, /Renewal Fees ₹499/);
+    assert.doesNotMatch(extractionPrompt, /UNI Rupay Credit Card|Zagg Credit Card|Different rewards/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("uses a parent issuer catalogue when a search-discovered Amex page is JavaScript-only", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  let extractionPrompt = "";
+  const foundUrl = "https://www.americanexpress.com/in/credit-know-how/credit-card-fees/";
+  const parentUrl = "https://www.americanexpress.com/in/credit-know-how/";
+  const catalogueHtml = '<html><head><title>American Express Card Information</title></head><body><main>' +
+    '<h2>American Express Platinum Card</h2>' +
+    '<p>Annual membership fee is ₹66,000 plus applicable taxes. The Platinum Card is a charge card.</p>' +
+    '<p>Earn 3X Membership Rewards points on eligible overseas spending, subject to current terms and exclusions.</p>' +
+    '<p>Supplementary card benefits and eligibility are detailed in the official cardmember terms.</p>' +
+    '<h2>American Express Gold Card</h2>' +
+    '<p>Different annual membership fee and monthly transaction qualification rules apply to the Gold Card.</p>' +
+    '</main></body></html>';
+  const validDraft = {
+    issuer: "American Express",
+    cardName: "American Express Platinum Card",
+    network: null,
+    rewardCurrency: "Membership Rewards points",
+    annualFee: 66000,
+    joiningFee: 66000,
+    annualFeeWaiver: null,
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [],
+    missingItems: ["Confirm full terms, caps and eligibility before publishing."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+
+    if (url.hostname === "html.duckduckgo.com") {
+      return new Response(
+        '<html><a class="result__a" href="' + foundUrl + '">Cover Card Charges | American Express India</a></html>',
+        { headers: { "content-type": "text/html" } }
+      );
+    }
+    if (url.toString() === foundUrl) {
+      return new Response(
+        '<html><head><title>Cover Card Charges</title></head><body>' +
+        '<a href="#main-content" aria-label="Skip to content">Skip to content</a>' +
+        '<div id="root"></div><script src="/assets/amex-app.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === parentUrl) {
+      return new Response(catalogueHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    if (url.toString() === "https://www.americanexpress.com/in/") {
+      return new Response("<html></html>", { headers: { "content-type": "text/html" } });
+    }
+    return new Response("Not found", { status: 404 });
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        issuer: "American Express",
+        cardName: "American Express Platinum Card"
+      })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async run(_model, request) {
+          extractionPrompt = request.messages?.[1]?.content || "";
+          return { response: JSON.stringify(validDraft) };
+        }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.suppliedSourceUrl, false);
+    assert.equal(body.discovery.selectedSource, parentUrl);
+    assert.ok(fetchedUrls.includes(foundUrl));
+    assert.ok(fetchedUrls.includes(parentUrl));
+    assert.match(extractionPrompt, /Annual membership fee is ₹66,000/);
+    assert.match(extractionPrompt, /Earn 3X Membership Rewards points/);
+    assert.doesNotMatch(extractionPrompt, /American Express Gold Card|Different annual membership fee/);
+    assert.ok(!body.discovery.sourceCandidates.some(item => /Skip to content/i.test(item.title)));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("rejects generic card-type labels instead of mixing different card variants", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  globalThis.fetch = async () => {
+    fetchCount += 1;
+    throw new Error("Source discovery must not run for an ambiguous generic card type.");
+  };
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "American Express", cardName: "charge card" })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: { async run() { return { response: "{}" }; } }
+    });
+    assert.equal(response.status, 400);
+    const body = await response.json();
+    assert.match(body.error, /card type, not a specific product name/i);
+    assert.match(body.nextStep, /exact card product\/variant/i);
+    assert.equal(fetchCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("extracts YES BANK UNI from the current official MITC when the product page is JavaScript-only", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchedUrls = [];
+  const productUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards/uni-credit-card";
+  const catalogueUrl = "https://www.yes.bank.in/personal-banking/yes-individual/cards/credit-cards";
+  const mitcUrl = "https://webcdn.uni.cards/nxwave/docs/CC_YesBank_MITC.pdf";
+  const keyFactUrl = "https://quickapply.yes.bank.in/savings/assets/files/yesbank_key_fact_statement.pdf";
+  const mitcText = "YES BANK Credit Card MITC. CMITC_V18_23062026. " +
+    "UNI joining fee is NIL and annual membership fee is INR 499, exclusive of GST. " +
+    "Minimum spend for waiver of joining fee is INR 5,000 within one month of card setup date. " +
+    "Minimum spend for waiver of annual fee is INR 50,000 within 12 months prior to card anniversary date. " +
+    "The UNI credit card earns 1% cash back in Uni Coins on all transactions. " +
+    "0% foreign currency conversion charges apply to international transactions. " +
+    "A 1% fuel surcharge waiver applies to eligible fuel transactions. ".repeat(3);
+  const kfsText = "YES BANK Key Fact Statement - Credit Cards. UNI Credit Card fee schedule and cardmember disclosure. " +
+    "The current co-brand terms and conditions must be read with this Key Fact Statement. ".repeat(3);
+  const validDraft = {
+    issuer: "YES Bank",
+    cardName: "UNI Credit Card",
+    network: null,
+    rewardCurrency: "Uni Coins",
+    annualFee: 499,
+    joiningFee: 0,
+    annualFeeWaiver: "Annual fee waived on eligible annual spends of INR 50,000; joining fee waiver requires INR 5,000 within one month.",
+    effectiveDate: null,
+    rules: [],
+    exclusions: [],
+    benefits: [
+      { name: "1% cash back", description: "1% cash back in Uni Coins on all transactions.", conditions: null,
+        sourceQuote: "The UNI credit card earns 1% cash back in Uni Coins on all transactions.", sourceUrl: mitcUrl }
+    ],
+    missingItems: ["Confirm exact network variant from the physical card."],
+    summary: "Draft awaiting human review."
+  };
+
+  globalThis.fetch = async input => {
+    const url = new URL(typeof input === "string" ? input : input.url);
+    fetchedUrls.push(url.toString());
+    if (url.toString() === productUrl || url.toString() === catalogueUrl || url.toString() === catalogueUrl + "/") {
+      return new Response(
+        '<html><head><title>UNI Credit Card | YES BANK</title></head><body>' +
+        '<div id="root"></div><script src="/assets/uni-card.js"></script></body></html>',
+        { headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    }
+    if (url.toString() === mitcUrl || url.toString() === keyFactUrl) {
+      return new Response(new Uint8Array([37, 80, 68, 70, 45, 49]), {
+        headers: { "content-type": "application/pdf" }
+      });
+    }
+    throw new Error("Unexpected outbound test URL: " + url.toString());
+  };
+
+  try {
+    const response = await worker.fetch(new Request("https://app.example/api/admin/auto-extract", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ issuer: "YES Bank", cardName: "UNI Credit Card" })
+    }), {
+      ADMIN_TOKEN: "test-admin-token",
+      AI: {
+        async toMarkdown() { return { format: "markdown", data: mitcText + "\n\n" + kfsText }; },
+        async run(_model, request) { return { response: JSON.stringify(validDraft) }; }
+      }
+    });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.discovery.selectedSource, mitcUrl);
+    assert.ok(body.discovery.sourcesRead.some(source => source.url === mitcUrl));
+    assert.ok(body.sourceExcerpt.includes("annual membership fee is INR 499"));
+    assert.ok(body.sourceExcerpt.includes("1% cash back in Uni Coins on all transactions"));
+    assert.ok(fetchedUrls.includes(productUrl));
+    assert.ok(fetchedUrls.includes(mitcUrl));
+    assert.ok(!fetchedUrls.some(url => /duckduckgo|bing\.com/.test(url)));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

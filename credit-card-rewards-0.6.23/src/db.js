@@ -1,0 +1,107 @@
+import { DEMO_CARDS } from "./demo-data.js";
+import { normalizeRewardUnit } from "./reward-units.js";
+import { deduplicatePendingDraftRows } from "./draft-dedupe.js";
+
+function fromDbCard(row) {
+  return {
+    id: row.id,
+    issuer: row.issuer,
+    name: row.name,
+    network: row.network && !/^(?:not specified|not recorded|unknown)$/i.test(String(row.network).trim()) ? String(row.network).trim() : null,
+    rewardCurrency: row.reward_currency || "Rewards",
+    annualFee: row.annual_fee == null ? null : Number(row.annual_fee),
+    joiningFee: row.joining_fee == null ? null : Number(row.joining_fee),
+    annualFeeWaiver: row.annual_fee_waiver || null,
+    description: row.description || "",
+    officialUrl: row.official_url || null,
+    reviewStatus: row.review_status || "needs_review",
+    sourceDate: row.source_date || null,
+    rules: [],
+    exclusions: [],
+    benefits: []
+  };
+}
+
+// The catalogue is read on every page view and again by /api/calculate and /api/cards/:id.
+// Cache the assembled result per D1 binding for a few seconds (and share the in-flight
+// promise between concurrent requests) so a burst of traffic costs one set of D1 queries.
+// Admin writes call invalidateCatalogueCache(); other isolates catch up within the TTL.
+const CATALOGUE_TTL_MS = 15000;
+const catalogueCache = new WeakMap();
+
+export function invalidateCatalogueCache(env) {
+  if (env && env.DB && typeof env.DB === "object") catalogueCache.delete(env.DB);
+}
+
+export async function getCards(env) {
+  if (!env.DB) return DEMO_CARDS.map(card => structuredClone(card));
+  const cached = catalogueCache.get(env.DB);
+  if (cached && cached.expiresAt > Date.now()) return structuredClone(await cached.promise);
+  const promise = loadCardsFromD1(env);
+  const entry = { promise, expiresAt: Date.now() + CATALOGUE_TTL_MS };
+  catalogueCache.set(env.DB, entry);
+  try {
+    return structuredClone(await promise);
+  } catch (error) {
+    // Never cache a failure.
+    if (catalogueCache.get(env.DB) === entry) catalogueCache.delete(env.DB);
+    throw error;
+  }
+}
+
+async function loadCardsFromD1(env) {
+  try {
+    const [cardRows, ruleRows, exclusionRows, benefitRows] = await Promise.all([
+      env.DB.prepare("SELECT id, issuer, name, network, reward_currency, annual_fee, joining_fee, annual_fee_waiver, description, official_url, review_status, source_date FROM cards WHERE status != 'archived' ORDER BY issuer, name").all(),
+      env.DB.prepare("SELECT id, card_id, rule_json, status, valid_from, valid_to, source_id FROM card_rules WHERE status IN ('approved','demo') ORDER BY priority DESC, created_at DESC").all(),
+      env.DB.prepare("SELECT id, card_id, exclusion_json, status, valid_from, valid_to, source_id FROM card_exclusions WHERE status IN ('approved','demo')").all(),
+      env.DB.prepare("SELECT id, card_id, benefit_json, status, valid_from, valid_to, source_id FROM card_benefits WHERE status IN ('approved','demo')").all()
+    ]);
+    const cards = (cardRows.results || []).map(fromDbCard);
+    const byId = new Map(cards.map(card => [card.id, card]));
+    for (const row of (ruleRows.results || [])) {
+      const card = byId.get(row.card_id);
+      if (!card) continue;
+      try {
+        const rule = JSON.parse(row.rule_json);
+        const originalUnit = String(rule.unit || "").trim();
+        const normalizedUnit = normalizeRewardUnit(originalUnit, card.rewardCurrency);
+        if (normalizedUnit && normalizedUnit !== originalUnit) {
+          rule.unit = normalizedUnit;
+          rule.notes = [String(rule.notes || "").trim(), `The stored unit "${originalUnit}" looked like the spend currency; displayed as the card's reward currency "${normalizedUnit}". Confirm the original source quote.`].filter(Boolean).join(" ");
+        }
+        card.rules.push({ id: row.id, ...rule, status: row.status, validFrom: row.valid_from, validTo: row.valid_to, sourceId: row.source_id || null });
+      } catch { /* malformed rows are ignored; admin can repair their source draft */ }
+    }
+    for (const row of (exclusionRows.results || [])) {
+      const card = byId.get(row.card_id);
+      if (!card) continue;
+      try {
+        const exclusion = JSON.parse(row.exclusion_json);
+        card.exclusions.push({ id: row.id, ...exclusion, status: row.status, validFrom: row.valid_from, validTo: row.valid_to, sourceId: row.source_id || null });
+      } catch { /* malformed rows are ignored */ }
+    }
+    for (const row of (benefitRows.results || [])) {
+      const card = byId.get(row.card_id);
+      if (!card) continue;
+      try {
+        const benefit = JSON.parse(row.benefit_json);
+        card.benefits.push({ id: row.id, ...benefit, status: row.status, validFrom: row.valid_from, validTo: row.valid_to, sourceId: row.source_id || null });
+      } catch { /* malformed rows are ignored */ }
+    }
+    return cards;
+  } catch (error) {
+    console.error("D1 catalogue query failed:", error?.message || error);
+    throw new Error("D1 catalogue query failed. Confirm the database ID and apply all migrations.");
+  }
+}
+
+export async function getDrafts(env) {
+  if (!env.DB) return [];
+  const result = await env.DB.prepare("SELECT id, card_id, source_url, source_title, source_excerpt, extracted_json, status, created_at FROM extraction_drafts WHERE status = 'needs_review' ORDER BY created_at DESC LIMIT 200").all();
+  const uniqueRows = deduplicatePendingDraftRows(result.results || []);
+  return uniqueRows.slice(0, 100).map(row => ({
+    id: row.id, cardId: row.card_id, sourceUrl: row.source_url, sourceTitle: row.source_title,
+    sourceExcerpt: row.source_excerpt, extractedJson: row.extracted_json, status: row.status, createdAt: row.created_at
+  }));
+}
