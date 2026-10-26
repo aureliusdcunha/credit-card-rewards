@@ -359,14 +359,14 @@ function explicitFeeFact(clauses, feeKind) {
     let match = priceAfterLabel.exec(clause.quote);
     // HTML tables often extract the Description and Charges cells as separate
     // lines. Join a fee label only with the immediately following numeric cell.
-    if (!match && clauses[i + 1] && /^\\s*(?:₹\\s*|Rs\\.?\\s*|INR\\s*)?[\\d,]+(?:\\.\\d+)?(?:\\s|$)/i.test(clauses[i + 1].quote)) {
+    if (!match && clauses[i + 1] && /^\s*(?:₹\s*|Rs\.?\s*|INR\s*)?[\d,]+(?:\.\d+)?(?:\s|$)/i.test(clauses[i + 1].quote)) {
       targetClause = { ...clause, quote: clause.quote + " " + clauses[i + 1].quote };
       match = priceAfterLabel.exec(targetClause.quote);
     }
     if (!match) continue;
     // Don't interpret a fee-waiver threshold, minimum spend or transaction spend as a fee.
     const gap = targetClause.quote.slice(match.index + match[0].indexOf("fee") + 3, match.index + match[0].length);
-    if (/\\b(?:waiv|spend|minimum|threshold|eligible)\\b/i.test(gap)) continue;
+    if (/\b(?:waiv|spend|minimum|threshold|eligible)\b/i.test(gap)) continue;
     const amount = Number(match[1].replace(/,/g, ""));
     if (!Number.isFinite(amount) || amount < 0) continue;
     return { ...targetClause, amount, explicitZero: amount === 0 };
